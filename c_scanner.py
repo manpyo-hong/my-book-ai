@@ -23,10 +23,10 @@ st.set_page_config(page_title="코드 사진 & 실행결과 분석기", page_ico
 # ---------------------------------------------------------
 st.markdown(
     """
-    <link rel="manifest" href="app/static/manifest.json">
+    <link rel="manifest" href="static/manifest.json">
     <meta name="theme-color" content="#2563EB">
-    <link rel="apple-touch-icon" href="app/static/apple-touch-icon.png">
-    <link rel="icon" href="app/static/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="static/apple-touch-icon.png">
+    <link rel="icon" href="static/favicon-32.png" sizes="32x32">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
