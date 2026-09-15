@@ -9,7 +9,7 @@ from pptx.util import Pt
 st.set_page_config(page_title="책 사진 PPT 변환기", page_icon="📚")
 
 st.title("📚 책 사진 ➔ 내용 요약 및 파워포인트(PPT) 변환기")
-st.write("책 페이지를 사진으로 찍어 올리면, 화면에서 요약을 확인하고 상단에서 세련된 PPT 파일을 바로 다운로드할 수 있습니다!")
+st.write("책 페이지를 사진으로 찍어 올리면, 상단에서 세련된 PPT 파일을 바로 다운로드하고 하단에서 요약을 확인할 수 있습니다!")
 
 # API 키 입력
 api_key = st.text_input("Gemini API 키를 입력하세요", type="password")
@@ -41,7 +41,7 @@ if uploaded_file is not None and api_key:
                 
                 raw_text = response.text
                 
-                # 2. python-pptx를 이용해 파워포인트 파일 미리 생성
+                # 2. python-pptx를 이용해 파워포인트 파일 생성
                 prs = Presentation()
                 slide = prs.slides.add_slide(prs.slide_layouts[1])
                 
@@ -66,7 +66,7 @@ if uploaded_file is not None and api_key:
                 
                 st.success("분석 완료!")
                 
-                # 3. 💡 PPT 다운로드 버튼을 상단(요약 결과 표시 전)에 배치
+                # 3. 💡 PPT 다운로드 버튼을 최상단에 배치
                 with open(ppt_path, "rb") as file:
                     st.download_button(
                         label="📥 [상단] 세련된 요약 PPT 파일 다운로드",
