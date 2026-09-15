@@ -14,12 +14,12 @@ import re
 # ---------------------------------------------------------
 # 페이지 설정
 # ---------------------------------------------------------
-st.set_page_config(page_title="C언어 코드 & 실행결과 분석기", page_icon="💻")
+st.set_page_config(page_title="코드 사진 & 실행결과 분석기", page_icon="💻")
 
-st.title("💻 C언어 책 사진 ➔ 코드 해설 & PPT 변환기")
+st.title("💻 코드 사진 ➔ 코드 해설 & PPT 변환기")
 st.write(
-    "C언어 예제 책 페이지를 여러 장 찍어 올리면, AI가 코드 분석과 실행 결과 풀이를 "
-    "담은 여러 슬라이드의 학습 PPT를 만들어 드립니다!"
+    "프로그래밍 책이나 코드가 담긴 페이지를 여러 장 찍어 올리면, AI가 어떤 언어인지 "
+    "자동으로 인식해서 코드 분석과 실행 결과 풀이를 담은 여러 슬라이드의 학습 PPT를 만들어 드립니다!"
 )
 
 # ---------------------------------------------------------
@@ -31,7 +31,7 @@ api_key = st.text_input("Gemini API 키를 입력하세요", type="password")
 # 파일 업로드 (여러 장 지원)
 # ---------------------------------------------------------
 uploaded_files = st.file_uploader(
-    "C언어 책 페이지 사진을 업로드하거나 촬영하세요 (여러 장 선택 가능)",
+    "코드가 담긴 책/자료 페이지 사진을 업로드하거나 촬영하세요 (여러 장 선택 가능)",
     type=["jpg", "jpeg", "png"],
     accept_multiple_files=True,
 )
@@ -94,20 +94,25 @@ if preview_items:
 # Gemini에게 "구조화된 JSON"으로 응답하도록 요청
 # -> 슬라이드를 여러 장으로 나눠 만들기 위함
 # ---------------------------------------------------------
-def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: list[str]) -> dict:
+def analyze_code_pages(client: genai.Client, images: list[bytes], mime_types: list[str]) -> dict:
     prompt = (
-        "당신은 C언어 책의 예제 코드를 학습 슬라이드로 정리해주는 도우미입니다. "
-        "첨부된 C언어 책 페이지 사진들을 분석해서, 코딩 초보자가 영어 문장을 "
-        "단어별로 해석하듯 코드를 한 줄씩 따라가며 이해할 수 있는 학습 노트를 만들어주세요.\n\n"
+        "당신은 프로그래밍 책의 예제 코드를 학습 슬라이드로 정리해주는 도우미입니다. "
+        "첨부된 책/자료 페이지 사진들을 분석해서, 코딩 초보자가 영어 문장을 "
+        "단어별로 해석하듯 코드를 한 줄씩 따라가며 이해할 수 있는 학습 노트를 만들어주세요. "
+        "코드가 어떤 프로그래밍 언어로 작성되었는지는 사진을 보고 스스로 판단하세요 "
+        "(C, C++, Java, Python, JavaScript 등 어떤 언어든 가능합니다).\n\n"
         "다음 JSON 형식으로만 응답하세요. 다른 설명, 마크다운 코드블록(```) "
         "표시는 절대 포함하지 마세요:\n\n"
         "{\n"
         '  "title": "전체 학습 노트 제목 (예: OO 예제 코드 분석 노트)",\n'
+        '  "language": "코드의 프로그래밍 언어를 나타내는 짧은 식별자 하나. 다음 중에서 "\n'
+        '              "고르세요: python, c, cpp, java, javascript, typescript, csharp, "\n'
+        '              "go, rust, kotlin, swift, php, ruby, sql, html, text. 확신이 서지 "\n'
+        '              "않으면 text로 표기하세요.",\n'
         '  "libraries": [\n'
         "    {\n"
-        '      "name": "코드에 포함된 헤더/라이브러리 이름 (예: stdio.h)",\n'
-        '      "description": "이 라이브러리가 왜 필요한지, 어떤 기능(입출력, 문자열 처리 등)을 "\n'
-        '                      "제공하는지 한 문장으로 설명"\n'
+        '      "name": "코드에 포함된 import/include/require 등 라이브러리·모듈 이름",\n'
+        '      "description": "이 라이브러리가 왜 필요한지, 어떤 기능을 제공하는지 한 문장으로 설명"\n'
         "    }\n"
         "  ],\n"
         '  "sections": [\n'
@@ -118,23 +123,27 @@ def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: 
         "  ],\n"
         '  "code_lines": [\n'
         "    {\n"
-        '      "code": "사진 속 코드 원문 한 줄 또는 한 구문 (예: printf(\\"%d\\\\n\\", sum);)",\n'
+        '      "code": "사진 속 코드 원문 한 줄 또는 한 구문",\n'
         '      "explanation": "이 코드 한 줄이 정확히 무엇을 하는지 우리말로 해설"\n'
         "    }\n"
         "  ]\n"
         "}\n\n"
         "각 항목별 작성 규칙:\n"
-        "- libraries: 코드 상단의 #include 등으로 쓰인 헤더를 모두 나열하세요. 없으면 빈 배열([])로 두세요.\n"
+        "- language: 코드 문법(세미콜론, 들여쓰기 방식, 키워드 등)을 보고 가장 가능성 높은 언어 "
+        "하나만 고르세요.\n"
+        "- libraries: 코드 상단에 import/#include/require/using 등으로 쓰인 라이브러리나 모듈을 "
+        "모두 나열하세요. 없으면 빈 배열([])로 두세요.\n"
         "- sections: 반드시 다음 3가지로 구성하세요.\n"
         "  1. 코드 핵심 목적 및 문법 설명\n"
-        "  2. 주요 함수 및 연산자 풀이\n"
+        "  2. 주요 함수(또는 메서드) 및 연산자 풀이\n"
         "  3. 예상 실행 결과 및 화면 설명\n"
         "  각 섹션의 bullets는 2~5개, 간결한 문장으로 작성하세요.\n"
-        "- code_lines: 사진 속 코드에서 의미 있는 구문(변수 선언, 함수 호출, 조건문, 반복문, "
-        "연산 등)을 코드에 나온 순서 그대로, 최대한 빠짐없이 나열하세요. 중괄호({ })만 있는 줄이나 "
-        "빈 줄은 생략해도 되지만, 그 외에는 최대한 모든 실행 라인을 포함하세요 (보통 8~20줄). "
-        "code 필드는 사진에 보이는 코드 그대로(들여쓰기, 세미콜론 포함) 적고, explanation은 "
-        "그 줄이 프로그램에서 실제로 하는 동작을 초보자도 이해할 수 있게 풀어서 설명하세요.\n\n"
+        "- code_lines: 사진 속 코드에서 의미 있는 구문(변수 선언, 함수/메서드 호출, 조건문, "
+        "반복문, 연산 등)을 코드에 나온 순서 그대로, 최대한 빠짐없이 나열하세요. 중괄호나 "
+        "들여쓰기만 있는 줄, 빈 줄은 생략해도 되지만, 그 외에는 최대한 모든 실행 라인을 "
+        "포함하세요 (보통 8~20줄). code 필드는 사진에 보이는 코드 그대로(들여쓰기, 구두점 포함) "
+        "적고, explanation은 그 줄이 프로그램에서 실제로 하는 동작을 초보자도 이해할 수 있게 "
+        "풀어서 설명하세요.\n\n"
         "특수문자(**, ###, - 등 마크다운 기호)는 bullets와 explanation에 쓰지 마세요. "
         "변수명, 함수명, 코드 자체는 원문 그대로 써도 됩니다."
     )
@@ -165,7 +174,8 @@ def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: 
     except json.JSONDecodeError:
         # JSON 파싱 실패 시, 최소한 하나의 슬라이드로라도 보여주기 위한 대비책
         data = {
-            "title": "C언어 학습 및 코드 분석 노트",
+            "title": "코드 학습 및 분석 노트",
+            "language": "text",
             "libraries": [],
             "sections": [{"heading": "분석 결과", "bullets": [raw_text]}],
             "code_lines": [],
@@ -210,7 +220,7 @@ def add_library_slide(prs, libraries: list[dict]):
         return
     layout = prs.slide_layouts[1]
     slide = prs.slides.add_slide(layout)
-    slide.shapes.title.text = "사용된 라이브러리(헤더) 설명"
+    slide.shapes.title.text = "사용된 라이브러리/모듈 설명"
     for p in slide.shapes.title.text_frame.paragraphs:
         p.font.size = Pt(24)
         p.font.bold = True
@@ -297,12 +307,12 @@ def build_pptx(data: dict) -> BytesIO:
     # 1. 표지 슬라이드
     title_slide_layout = prs.slide_layouts[0]
     slide = prs.slides.add_slide(title_slide_layout)
-    slide.shapes.title.text = data.get("title", "C언어 학습 및 코드 분석 노트")
+    slide.shapes.title.text = data.get("title", "코드 학습 및 분석 노트")
     for p in slide.shapes.title.text_frame.paragraphs:
         p.font.size = Pt(32)
         p.font.bold = True
     if len(slide.placeholders) > 1:
-        slide.placeholders[1].text = "AI가 자동으로 생성한 C언어 학습 노트"
+        slide.placeholders[1].text = "AI가 자동으로 생성한 코드 학습 노트"
 
     # 2. 라이브러리 설명 슬라이드
     add_library_slide(prs, data.get("libraries", []))
@@ -333,32 +343,32 @@ def build_pptx(data: dict) -> BytesIO:
 # 메인 로직
 # ---------------------------------------------------------
 if preview_items and api_key:
-    if st.button("C언어 코드 분석 및 PPT 변환 시작"):
-        with st.spinner("AI가 C언어 코드를 해설하고 실행 결과를 분석하는 중입니다..."):
+    if st.button("코드 분석 및 PPT 변환 시작"):
+        with st.spinner("AI가 코드를 해설하고 실행 결과를 분석하는 중입니다..."):
             try:
                 client = genai.Client(api_key=api_key)
 
                 images = [item[0] for item in preview_items]
                 mime_types = [item[1] for item in preview_items]
 
-                data = analyze_c_code_pages(client, images, mime_types)
+                data = analyze_code_pages(client, images, mime_types)
                 pptx_buffer = build_pptx(data)
 
-                st.success("C언어 분석 및 PPT 생성 완료!")
+                st.success("코드 분석 및 PPT 생성 완료!")
 
                 st.download_button(
-                    label="📥 C언어 학습 PPT 파일 다운로드",
+                    label="📥 코드 학습 PPT 파일 다운로드",
                     data=pptx_buffer,
-                    file_name="c_study_note.pptx",
+                    file_name="code_study_note.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 )
 
                 st.markdown("---")
-                st.markdown(f"### 📝 {data.get('title', 'C언어 코드 해설 및 실행 결과 풀이')}")
+                st.markdown(f"### 📝 {data.get('title', '코드 해설 및 실행 결과 풀이')}")
 
                 libraries = data.get("libraries", [])
                 if libraries:
-                    st.markdown("#### 📚 사용된 라이브러리")
+                    st.markdown("#### 📚 사용된 라이브러리/모듈")
                     for lib in libraries:
                         st.markdown(f"- **{lib.get('name', '')}** : {lib.get('description', '')}")
 
@@ -369,11 +379,12 @@ if preview_items and api_key:
 
                 code_lines = data.get("code_lines", [])
                 if code_lines:
-                    st.markdown("#### 🔍 코드 한 줄씩 해설")
+                    detected_language = data.get("language", "text") or "text"
+                    st.markdown(f"#### 🔍 코드 한 줄씩 해설 (감지된 언어: {detected_language})")
                     for item in code_lines:
                         code_col, expl_col = st.columns([1, 1])
                         with code_col:
-                            st.code(item.get("code", ""), language="c")
+                            st.code(item.get("code", ""), language=detected_language)
                         with expl_col:
                             st.markdown(item.get("explanation", ""))
 
@@ -383,4 +394,4 @@ if preview_items and api_key:
 elif preview_items and not api_key:
     st.warning("위쪽 빈칸에 Gemini API 키를 먼저 입력해 주세요!")
 elif api_key and not preview_items:
-    st.info("C언어 책 페이지 사진을 한 장 이상 업로드하거나 붙여넣어 주세요.")
+    st.info("코드가 담긴 사진을 한 장 이상 업로드하거나 붙여넣어 주세요.")
