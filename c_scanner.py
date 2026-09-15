@@ -4,6 +4,8 @@ from google.genai import types
 from pptx import Presentation
 from pptx.util import Pt
 from io import BytesIO
+from st_img_pastebutton import paste
+import base64
 import json
 import re
 
@@ -32,11 +34,53 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
 )
 
+# ---------------------------------------------------------
+# 클립보드에서 스크린샷 붙여넣기
+# ---------------------------------------------------------
+if "paste_count" not in st.session_state:
+    st.session_state.paste_count = 0
+if "pasted_images" not in st.session_state:
+    st.session_state.pasted_images = []  # [(bytes, mime_type), ...]
+
+st.markdown("**또는** 캡처한 스크린샷을 아래에 붙여넣기(Ctrl+V) 하세요")
+paste_col1, paste_col2 = st.columns([3, 1])
+
+with paste_col1:
+    pasted_data_url = paste(
+        label="📋 클립보드에서 이미지 붙여넣기",
+        key=f"paste_{st.session_state.paste_count}",
+    )
+
+with paste_col2:
+    if pasted_data_url is not None:
+        if st.button("➕ 이 이미지 추가"):
+            header, encoded = pasted_data_url.split(",", 1)
+            mime_type = header.split(";")[0].split(":")[1]
+            binary_data = base64.b64decode(encoded)
+            st.session_state.pasted_images.append((binary_data, mime_type))
+            st.session_state.paste_count += 1  # 위젯을 새로 만들어 다음 붙여넣기를 받음
+            st.rerun()
+
+if st.session_state.pasted_images:
+    if st.button("🗑️ 붙여넣은 이미지 전체 삭제"):
+        st.session_state.pasted_images = []
+        st.rerun()
+
+# ---------------------------------------------------------
+# 업로드 파일 + 붙여넣은 이미지 미리보기
+# ---------------------------------------------------------
+preview_items = []  # [(bytes, mime, caption), ...]
 if uploaded_files:
-    cols = st.columns(min(len(uploaded_files), 4))
-    for i, f in enumerate(uploaded_files):
+    preview_items += [(f.getvalue(), f.type, f"업로드 {i + 1}") for i, f in enumerate(uploaded_files)]
+preview_items += [
+    (data, mime, f"붙여넣기 {i + 1}") for i, (data, mime) in enumerate(st.session_state.pasted_images)
+]
+
+if preview_items:
+    cols = st.columns(min(len(preview_items), 4))
+    for i, (data, _, caption) in enumerate(preview_items):
         with cols[i % len(cols)]:
-            st.image(f, caption=f"페이지 {i + 1}", use_container_width=True)
+            st.image(data, caption=caption, use_container_width=True)
 
 
 # ---------------------------------------------------------
@@ -159,14 +203,14 @@ def build_pptx(data: dict) -> BytesIO:
 # ---------------------------------------------------------
 # 메인 로직
 # ---------------------------------------------------------
-if uploaded_files and api_key:
+if preview_items and api_key:
     if st.button("C언어 코드 분석 및 PPT 변환 시작"):
         with st.spinner("AI가 C언어 코드를 해설하고 실행 결과를 분석하는 중입니다..."):
             try:
                 client = genai.Client(api_key=api_key)
 
-                images = [f.getvalue() for f in uploaded_files]
-                mime_types = [f.type for f in uploaded_files]
+                images = [item[0] for item in preview_items]
+                mime_types = [item[1] for item in preview_items]
 
                 data = analyze_c_code_pages(client, images, mime_types)
                 pptx_buffer = build_pptx(data)
@@ -190,7 +234,7 @@ if uploaded_files and api_key:
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
 
-elif uploaded_files and not api_key:
+elif preview_items and not api_key:
     st.warning("위쪽 빈칸에 Gemini API 키를 먼저 입력해 주세요!")
-elif api_key and not uploaded_files:
-    st.info("C언어 책 페이지 사진을 한 장 이상 업로드해주세요.")
+elif api_key and not preview_items:
+    st.info("C언어 책 페이지 사진을 한 장 이상 업로드하거나 붙여넣어 주세요.")
