@@ -8,7 +8,7 @@ from pptx.util import Pt
 # 페이지 설정
 st.set_page_config(page_title="책 사진 PPT 변환기", page_icon="📚")
 
-st.title("📚 책 사진 ➔ 파워포인트(PPT) 변환기")
+st.title("📚 책 사진 ➔ 내용 요약 및 파워포인트(PPT) 변환기")
 st.write("책 페이지를 사진으로 찍어 올리면, 화면에서 요약을 확인하고 상단에서 세련된 PPT 파일을 바로 다운로드할 수 있습니다!")
 
 # API 키 입력
