@@ -9,7 +9,7 @@ from pptx.util import Inches, Pt
 st.set_page_config(page_title="책 사진 PPT 변환기", page_icon="📚")
 
 st.title("📚 책 사진 ➔ 파워포인트(PPT) 변환기")
-st.write("책 페이지를 사진으로 찍어 올리면, 깔끔한 공부용 PPT 파일로 만들어 드립니다!")
+st.write("책 페이지를 사진으로 찍어 올리면, 깔끔한 공부용 PPT 파일로 정리해서 만들어 드립니다!")
 
 # API 키 입력
 api_key = st.text_input("Gemini API 키를 입력하세요", type="password")
