@@ -42,12 +42,17 @@ if "paste_count" not in st.session_state:
 if "pasted_images" not in st.session_state:
     st.session_state.pasted_images = []  # [(bytes, mime_type), ...]
 
-st.markdown("**또는** 캡처한 스크린샷을 아래에 붙여넣기(Ctrl+V) 하세요")
+st.markdown("**또는** 스크린샷을 캡처해 클립보드에 복사한 뒤, 아래 버튼을 클릭하세요")
+st.caption(
+    "💡 Ctrl+V가 아니라 **버튼 클릭**으로 동작합니다. "
+    "Windows는 Win+Shift+S, Mac은 Cmd+Shift+4 누른 뒤 Control까지 같이 누르면 "
+    "클립보드로 복사돼요. 복사 직후 바로 아래 버튼을 눌러주세요."
+)
 paste_col1, paste_col2 = st.columns([3, 1])
 
 with paste_col1:
     pasted_data_url = paste(
-        label="📋 클립보드에서 이미지 붙여넣기",
+        label="📋 클립보드 이미지 불러오기",
         key=f"paste_{st.session_state.paste_count}",
     )
 
