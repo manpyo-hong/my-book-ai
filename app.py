@@ -23,7 +23,7 @@ if uploaded_file is not None and api_key:
                 image_bytes = uploaded_file.getvalue()
                 
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.6-flash",
                     contents=[
                         types.Part.from_bytes(
                             data=image_bytes,
