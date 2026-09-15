@@ -1,3 +1,4 @@
 google-genai
 streamlit
 python-pptx
+st_img_pastebutton
