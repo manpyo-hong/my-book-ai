@@ -4,6 +4,7 @@ from google.genai import types
 from pptx import Presentation
 from pptx.util import Pt
 from pptx.dml.color import RGBColor
+from pptx.enum.text import MSO_ANCHOR
 from io import BytesIO
 from st_img_pastebutton import paste
 import base64
@@ -178,14 +179,19 @@ def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: 
 # ---------------------------------------------------------
 def set_autofit_text(text_frame, bullets: list[str]):
     text_frame.word_wrap = True
+    text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE  # 내용이 적어도 위에 쏠리지 않고 중앙에 배치
+
     total_chars = sum(len(b) for b in bullets)
 
+    # 글자 수가 적을수록(= 슬라이드가 휑해 보일수록) 글자를 크게, 줄 간격도 넓게
     if total_chars > 500:
-        font_size = Pt(14)
+        font_size, space_after = Pt(14), Pt(8)
     elif total_chars > 250:
-        font_size = Pt(16)
+        font_size, space_after = Pt(16), Pt(12)
+    elif total_chars > 100:
+        font_size, space_after = Pt(18), Pt(18)
     else:
-        font_size = Pt(18)
+        font_size, space_after = Pt(22), Pt(24)
 
     text_frame.clear()
     for i, bullet in enumerate(bullets):
@@ -193,6 +199,7 @@ def set_autofit_text(text_frame, bullets: list[str]):
         p.text = bullet
         p.level = 0
         p.font.size = font_size
+        p.space_after = space_after
 
 
 # ---------------------------------------------------------
@@ -217,43 +224,68 @@ def add_library_slide(prs, libraries: list[dict]):
 
 
 # ---------------------------------------------------------
+# 항목을 슬라이드 수에 맞춰 "균등하게" 나눠줌
+# (마지막 슬라이드에 1~2개만 남아 휑해지는 것을 방지)
+# ---------------------------------------------------------
+def chunk_evenly(items: list, max_per_slide: int) -> list[list]:
+    n = len(items)
+    if n == 0:
+        return []
+    num_slides = -(-n // max_per_slide)  # 올림 나눗셈
+    per_slide = -(-n // num_slides)      # 슬라이드 수에 맞게 다시 균등 배분
+    return [items[i:i + per_slide] for i in range(0, n, per_slide)]
+
+
+# ---------------------------------------------------------
 # "코드 한 줄씩 해설" 슬라이드 추가 (코드 → 설명 쌍을 함께 표시)
 # ---------------------------------------------------------
-def add_code_breakdown_slides(prs, code_lines: list[dict], lines_per_slide: int = 5):
+def add_code_breakdown_slides(prs, code_lines: list[dict], max_lines_per_slide: int = 6):
     if not code_lines:
         return
     layout = prs.slide_layouts[1]
+    chunks = chunk_evenly(code_lines, max_lines_per_slide)
 
-    for start in range(0, len(code_lines), lines_per_slide):
-        chunk = code_lines[start:start + lines_per_slide]
+    line_no = 1
+    for chunk in chunks:
         slide = prs.slides.add_slide(layout)
-        end = start + len(chunk)
-        slide.shapes.title.text = f"코드 한 줄씩 해설 ({start + 1}~{end}번째)"
+        end = line_no + len(chunk) - 1
+        slide.shapes.title.text = f"코드 한 줄씩 해설 ({line_no}~{end}번째)"
         for p in slide.shapes.title.text_frame.paragraphs:
             p.font.size = Pt(22)
             p.font.bold = True
+        line_no = end + 1
 
         tf = slide.placeholders[1].text_frame
         tf.word_wrap = True
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE  # 줄 수가 적어도 중앙에 배치
         tf.clear()
+
+        # 줄 수가 적을수록 글자를 키우고 줄 간격을 넓혀서 빈 공간을 채움
+        if len(chunk) <= 2:
+            font_size, space_after = Pt(18), Pt(28)
+        elif len(chunk) <= 4:
+            font_size, space_after = Pt(15), Pt(20)
+        else:
+            font_size, space_after = Pt(13), Pt(14)
 
         for i, item in enumerate(chunk):
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            p.space_after = space_after
 
             code_run = p.add_run()
             code_run.text = item.get("code", "")
             code_run.font.name = "Consolas"
-            code_run.font.size = Pt(13)
+            code_run.font.size = font_size
             code_run.font.bold = True
             code_run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x99)
 
             arrow_run = p.add_run()
             arrow_run.text = "  →  "
-            arrow_run.font.size = Pt(13)
+            arrow_run.font.size = font_size
 
             expl_run = p.add_run()
             expl_run.text = item.get("explanation", "")
-            expl_run.font.size = Pt(13)
+            expl_run.font.size = font_size
 
 
 # ---------------------------------------------------------
