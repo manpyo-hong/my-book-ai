@@ -9,7 +9,7 @@ from pptx.util import Pt
 st.set_page_config(page_title="책 사진 PPT 변환기", page_icon="📚")
 
 st.title("📚 책 사진 ➔ 파워포인트(PPT) 변환기")
-st.write("책 페이지를 사진으로 찍어 올리면, 깔끔하고 세련된 공부용 PPT 파일로 만들어 드립니다!")
+st.write("책 페이지를 사진으로 찍어 올리면, 화면에서 요약을 확인하고 상단에서 세련된 PPT 파일을 바로 다운로드할 수 있습니다!")
 
 # API 키 입력
 api_key = st.text_input("Gemini API 키를 입력하세요", type="password")
@@ -20,7 +20,7 @@ uploaded_file = st.file_uploader("책 사진을 업로드하거나 촬영하세�
 if uploaded_file is not None and api_key:
     st.image(uploaded_file, caption="업로드된 책 사진", use_container_width=True)
     
-    if st.button("PPT 학습 자료로 변환 시작"):
+    if st.button("AI 분석 및 PPT 변환 시작"):
         with st.spinner("AI가 책을 분석하고 PPT를 만드는 중입니다..."):
             try:
                 # 1. Gemini AI 호출
@@ -41,7 +41,7 @@ if uploaded_file is not None and api_key:
                 
                 raw_text = response.text
                 
-                # 2. python-pptx를 이용해 파워포인트 파일 생성 (글자 크기 최적화)
+                # 2. python-pptx를 이용해 파워포인트 파일 미리 생성
                 prs = Presentation()
                 slide = prs.slides.add_slide(prs.slide_layouts[1])
                 
@@ -58,22 +58,28 @@ if uploaded_file is not None and api_key:
                 tf.text = raw_text
                 
                 for paragraph in tf.paragraphs:
-                    paragraph.font.size = Pt(13) # 본문 글자 크기를 작고 가독성 있게 설정
+                    paragraph.font.size = Pt(13)
                 
                 # 임시 파일로 저장
                 ppt_path = "study_note.pptx"
                 prs.save(ppt_path)
                 
-                st.success("PPT 파일 생성 완료!")
+                st.success("분석 완료!")
                 
-                # 3. 다운로드 버튼 제공
+                # 3. 💡 PPT 다운로드 버튼을 상단(요약 결과 표시 전)에 배치
                 with open(ppt_path, "rb") as file:
                     st.download_button(
-                        label="📥 세련된 요약 PPT 파일 다운로드",
+                        label="📥 [상단] 세련된 요약 PPT 파일 다운로드",
                         data=file,
                         file_name="book_study_note.pptx",
                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     )
+                
+                st.markdown("---")
+                
+                # 4. 하단에 AI 요약 내용 표시
+                st.markdown("### 📝 AI 요약 결과")
+                st.markdown(raw_text)
                     
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
