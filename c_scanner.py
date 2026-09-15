@@ -16,6 +16,25 @@ import re
 # ---------------------------------------------------------
 st.set_page_config(page_title="코드 사진 & 실행결과 분석기", page_icon="💻")
 
+# ---------------------------------------------------------
+# PWA(홈 화면 앱) 설정: 앱 이름 "코드분석앱", 아이콘, 테마 색상 지정
+# 정적 파일은 /static 폴더 + .streamlit/config.toml의
+# enableStaticServing = true 설정이 있어야 정상 동작합니다.
+# ---------------------------------------------------------
+st.markdown(
+    """
+    <link rel="manifest" href="app/static/manifest.json">
+    <meta name="theme-color" content="#2563EB">
+    <link rel="apple-touch-icon" href="app/static/apple-touch-icon.png">
+    <link rel="icon" href="app/static/favicon-32.png" sizes="32x32">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="코드분석앱">
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("💻 코드 사진 ➔ 코드 해설 & PPT 변환기")
 st.write(
     "프로그래밍 책이나 코드가 담긴 페이지를 여러 장 찍어 올리면, AI가 어떤 언어인지 "
