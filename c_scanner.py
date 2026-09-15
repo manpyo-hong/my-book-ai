@@ -3,6 +3,7 @@ from google import genai
 from google.genai import types
 from pptx import Presentation
 from pptx.util import Pt
+from pptx.dml.color import RGBColor
 from io import BytesIO
 from st_img_pastebutton import paste
 import base64
@@ -95,24 +96,46 @@ if preview_items:
 def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: list[str]) -> dict:
     prompt = (
         "당신은 C언어 책의 예제 코드를 학습 슬라이드로 정리해주는 도우미입니다. "
-        "첨부된 C언어 책 페이지 사진들을 분석해서 학습 노트를 만들어주세요.\n\n"
+        "첨부된 C언어 책 페이지 사진들을 분석해서, 코딩 초보자가 영어 문장을 "
+        "단어별로 해석하듯 코드를 한 줄씩 따라가며 이해할 수 있는 학습 노트를 만들어주세요.\n\n"
         "다음 JSON 형식으로만 응답하세요. 다른 설명, 마크다운 코드블록(```) "
         "표시는 절대 포함하지 마세요:\n\n"
         "{\n"
         '  "title": "전체 학습 노트 제목 (예: OO 예제 코드 분석 노트)",\n'
+        '  "libraries": [\n'
+        "    {\n"
+        '      "name": "코드에 포함된 헤더/라이브러리 이름 (예: stdio.h)",\n'
+        '      "description": "이 라이브러리가 왜 필요한지, 어떤 기능(입출력, 문자열 처리 등)을 "\n'
+        '                      "제공하는지 한 문장으로 설명"\n'
+        "    }\n"
+        "  ],\n"
         '  "sections": [\n'
         "    {\n"
         '      "heading": "슬라이드 제목",\n'
         '      "bullets": ["요점 1", "요점 2", "요점 3"]\n'
         "    }\n"
+        "  ],\n"
+        '  "code_lines": [\n'
+        "    {\n"
+        '      "code": "사진 속 코드 원문 한 줄 또는 한 구문 (예: printf(\\"%d\\\\n\\", sum);)",\n'
+        '      "explanation": "이 코드 한 줄이 정확히 무엇을 하는지 우리말로 해설"\n'
+        "    }\n"
         "  ]\n"
         "}\n\n"
-        "섹션은 반드시 다음 3가지로 구성하세요:\n"
-        "1. 코드 핵심 목적 및 문법 설명\n"
-        "2. 주요 함수 및 연산자 풀이\n"
-        "3. 예상 실행 결과 및 화면 설명\n\n"
-        "각 섹션의 bullets는 2~5개, 한 줄에 너무 길지 않게 간결한 문장으로 작성하세요. "
-        "특수문자(**, ###, - 등)는 쓰지 마세요. 변수명이나 함수명은 그대로 써도 됩니다."
+        "각 항목별 작성 규칙:\n"
+        "- libraries: 코드 상단의 #include 등으로 쓰인 헤더를 모두 나열하세요. 없으면 빈 배열([])로 두세요.\n"
+        "- sections: 반드시 다음 3가지로 구성하세요.\n"
+        "  1. 코드 핵심 목적 및 문법 설명\n"
+        "  2. 주요 함수 및 연산자 풀이\n"
+        "  3. 예상 실행 결과 및 화면 설명\n"
+        "  각 섹션의 bullets는 2~5개, 간결한 문장으로 작성하세요.\n"
+        "- code_lines: 사진 속 코드에서 의미 있는 구문(변수 선언, 함수 호출, 조건문, 반복문, "
+        "연산 등)을 코드에 나온 순서 그대로, 최대한 빠짐없이 나열하세요. 중괄호({ })만 있는 줄이나 "
+        "빈 줄은 생략해도 되지만, 그 외에는 최대한 모든 실행 라인을 포함하세요 (보통 8~20줄). "
+        "code 필드는 사진에 보이는 코드 그대로(들여쓰기, 세미콜론 포함) 적고, explanation은 "
+        "그 줄이 프로그램에서 실제로 하는 동작을 초보자도 이해할 수 있게 풀어서 설명하세요.\n\n"
+        "특수문자(**, ###, - 등 마크다운 기호)는 bullets와 explanation에 쓰지 마세요. "
+        "변수명, 함수명, 코드 자체는 원문 그대로 써도 됩니다."
     )
 
     parts = [
@@ -142,7 +165,9 @@ def analyze_c_code_pages(client: genai.Client, images: list[bytes], mime_types: 
         # JSON 파싱 실패 시, 최소한 하나의 슬라이드로라도 보여주기 위한 대비책
         data = {
             "title": "C언어 학습 및 코드 분석 노트",
+            "libraries": [],
             "sections": [{"heading": "분석 결과", "bullets": [raw_text]}],
+            "code_lines": [],
         }
 
     return data
@@ -171,6 +196,67 @@ def set_autofit_text(text_frame, bullets: list[str]):
 
 
 # ---------------------------------------------------------
+# "라이브러리 설명" 슬라이드 추가
+# ---------------------------------------------------------
+def add_library_slide(prs, libraries: list[dict]):
+    if not libraries:
+        return
+    layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(layout)
+    slide.shapes.title.text = "사용된 라이브러리(헤더) 설명"
+    for p in slide.shapes.title.text_frame.paragraphs:
+        p.font.size = Pt(24)
+        p.font.bold = True
+
+    body = slide.placeholders[1]
+    bullets = [
+        f"{lib.get('name', '이름 없음')} : {lib.get('description', '')}"
+        for lib in libraries
+    ]
+    set_autofit_text(body.text_frame, bullets)
+
+
+# ---------------------------------------------------------
+# "코드 한 줄씩 해설" 슬라이드 추가 (코드 → 설명 쌍을 함께 표시)
+# ---------------------------------------------------------
+def add_code_breakdown_slides(prs, code_lines: list[dict], lines_per_slide: int = 5):
+    if not code_lines:
+        return
+    layout = prs.slide_layouts[1]
+
+    for start in range(0, len(code_lines), lines_per_slide):
+        chunk = code_lines[start:start + lines_per_slide]
+        slide = prs.slides.add_slide(layout)
+        end = start + len(chunk)
+        slide.shapes.title.text = f"코드 한 줄씩 해설 ({start + 1}~{end}번째)"
+        for p in slide.shapes.title.text_frame.paragraphs:
+            p.font.size = Pt(22)
+            p.font.bold = True
+
+        tf = slide.placeholders[1].text_frame
+        tf.word_wrap = True
+        tf.clear()
+
+        for i, item in enumerate(chunk):
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+
+            code_run = p.add_run()
+            code_run.text = item.get("code", "")
+            code_run.font.name = "Consolas"
+            code_run.font.size = Pt(13)
+            code_run.font.bold = True
+            code_run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x99)
+
+            arrow_run = p.add_run()
+            arrow_run.text = "  →  "
+            arrow_run.font.size = Pt(13)
+
+            expl_run = p.add_run()
+            expl_run.text = item.get("explanation", "")
+            expl_run.font.size = Pt(13)
+
+
+# ---------------------------------------------------------
 # python-pptx로 여러 슬라이드 PPT 생성 (메모리에서 바로 생성)
 # ---------------------------------------------------------
 def build_pptx(data: dict) -> BytesIO:
@@ -186,7 +272,10 @@ def build_pptx(data: dict) -> BytesIO:
     if len(slide.placeholders) > 1:
         slide.placeholders[1].text = "AI가 자동으로 생성한 C언어 학습 노트"
 
-    # 2. 섹션별 내용 슬라이드
+    # 2. 라이브러리 설명 슬라이드
+    add_library_slide(prs, data.get("libraries", []))
+
+    # 3. 섹션별 내용 슬라이드 (핵심 목적 / 함수 풀이 / 실행 결과)
     content_layout = prs.slide_layouts[1]
     for section in data.get("sections", []):
         slide = prs.slides.add_slide(content_layout)
@@ -198,6 +287,9 @@ def build_pptx(data: dict) -> BytesIO:
         body = slide.placeholders[1]
         bullets = section.get("bullets", []) or ["내용 없음"]
         set_autofit_text(body.text_frame, bullets)
+
+    # 4. 코드 한 줄씩 해설 슬라이드 (코드 → 설명, 영어 직독직해처럼 매칭)
+    add_code_breakdown_slides(prs, data.get("code_lines", []))
 
     buf = BytesIO()
     prs.save(buf)
@@ -231,10 +323,27 @@ if preview_items and api_key:
 
                 st.markdown("---")
                 st.markdown(f"### 📝 {data.get('title', 'C언어 코드 해설 및 실행 결과 풀이')}")
+
+                libraries = data.get("libraries", [])
+                if libraries:
+                    st.markdown("#### 📚 사용된 라이브러리")
+                    for lib in libraries:
+                        st.markdown(f"- **{lib.get('name', '')}** : {lib.get('description', '')}")
+
                 for section in data.get("sections", []):
                     st.markdown(f"**{section.get('heading', '')}**")
                     for b in section.get("bullets", []):
                         st.markdown(f"- {b}")
+
+                code_lines = data.get("code_lines", [])
+                if code_lines:
+                    st.markdown("#### 🔍 코드 한 줄씩 해설")
+                    for item in code_lines:
+                        code_col, expl_col = st.columns([1, 1])
+                        with code_col:
+                            st.code(item.get("code", ""), language="c")
+                        with expl_col:
+                            st.markdown(item.get("explanation", ""))
 
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
