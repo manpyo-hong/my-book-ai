@@ -107,10 +107,28 @@ def load_supplements_from_sheet():
         raw_date = str(r.get("start_date", ""))
         clean_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
 
+        # 시트에서 표준용량과 내섭취량을 각각 불러오거나, 기존 데이터 호환 처리
+        std_val = r.get("standard_dosage", "")
+        my_val = r.get("my_dosage", "")
+        legacy_dosage = r.get("dosage", "")
+        
+        if not std_val and not my_val and legacy_dosage:
+            # 예전 데이터 형태("표준: ... | 내 섭취: ...")가 있다면 파싱해서 분리
+            if "|" in legacy_dosage:
+                parts = legacy_dosage.split("|")
+                std_val = parts[0].replace("표준:", "").strip()
+                my_val = parts[1].replace("내 섭취:", "").strip()
+            else:
+                my_val = legacy_dosage
+
+        dosage_display = f"표준: {std_val or '미기재'} | 내 섭취: {my_val or '미기재'}"
+
         supplements.append({
             "id": r["id"],
             "name": r.get("name", ""),
-            "dosage": r.get("dosage", ""),
+            "standard_dosage": std_val,
+            "my_dosage": my_val,
+            "dosage": dosage_display,
             "start_date": clean_date,
             "eat_time": r.get("eat_time", ""),
         })
@@ -121,6 +139,8 @@ def append_supplement_to_sheet(item):
     call_apps_script("add", {
         "id": item["id"],
         "name": item["name"],
+        "standard_dosage": item["standard_dosage"],
+        "my_dosage": item["my_dosage"],
         "dosage": item["dosage"],
         "start_date": item["start_date"],
         "eat_time": item["eat_time"]
@@ -163,7 +183,6 @@ def ai_lookup(name: str):
     try:
         raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
         
-        # AI 응답에서 표준 용량 자동 추출
         standard_val = ""
         clean_lines = []
         for line in raw_text.split('\n'):
@@ -270,7 +289,6 @@ with tab2:
             st.markdown("#### 📝 복용 정보 입력")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
             
-            # AI 조회 시 자동 추출된 표준 용량이 입력창에 기본값으로 세팅됨
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 f_standard = st.text_input(
@@ -294,13 +312,15 @@ with tab2:
                 else:
                     eat_time_str = ", ".join(f_eat_times) if f_eat_times else "점심"
                     
-                    std_text = f_standard.strip() if f_standard.strip() else "기준 미기재"
-                    my_text = f_dosage.strip() if f_dosage.strip() else "섭취량 미기재"
+                    std_text = f_standard.strip() if f_standard.strip() else "미기재"
+                    my_text = f_dosage.strip() if f_dosage.strip() else "미기재"
                     combined_dosage = f"표준: {std_text} | 내 섭취: {my_text}"
                     
                     new_item = {
                         "id": str(uuid.uuid4()),
                         "name": f_name.strip(),
+                        "standard_dosage": std_text,
+                        "my_dosage": my_text,
                         "dosage": combined_dosage,
                         "start_date": date.today().isoformat(),
                         "eat_time": eat_time_str,
