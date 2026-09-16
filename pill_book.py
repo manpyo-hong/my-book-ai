@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 from datetime import date
 import uuid
 import requests
@@ -11,12 +11,14 @@ st.set_page_config(
     layout="centered"
 )
 
-# 최신 Gemini 클라이언트 초기화 (Streamlit Secrets에서 키 가져오기)
+# Gemini API 설정 (Streamlit Secrets에서 키 가져오기)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
-    client = genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
+    # 안정적인 제미나이 플래시 모델 지정
+    model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception:
-    client = None
+    model = None
 
 # 카드 간격을 줄이기 위한 커스텀 CSS
 st.markdown("""
@@ -68,6 +70,9 @@ def load_supplements_from_sheet():
     today = date.today().isoformat()
     supplements = []
     
+    if not rows:
+        return []
+
     for r in rows:
         if not r.get("id"):
             continue
@@ -123,10 +128,7 @@ def ai_lookup(name: str) -> str:
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
     효능/효과, 권장 복용 방법, 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
     """
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-    )
+    response = model.generate_content(prompt)
     return response.text
 
 
@@ -174,7 +176,7 @@ with tab1:
     if ai_search:
         if not drug_input.strip():
             st.error("검색할 약 또는 영양제 이름을 입력해주세요.")
-        elif not client:
+        elif not model:
             st.error("Gemini API 키가 설정되지 않았거나 올바르지 않습니다. Streamlit Secrets를 확인해주세요.")
         else:
             with st.spinner(f"'{drug_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
@@ -211,11 +213,10 @@ with tab2:
     with col3:
         supp_direct_input = st.button("+ 직접 입력", use_container_width=True, key="supp_direct_input")
 
-    # AI 조회 결과를 세션에 보관 (등록 버튼을 눌러도 결과가 사라지지 않도록)
     if supp_ai_search:
         if not supp_input.strip():
             st.error("검색할 영양제 이름을 입력해주세요.")
-        elif not client:
+        elif not model:
             st.error("Gemini API 키가 설정되지 않았거나 올바르지 않습니다. Streamlit Secrets를 확인해주세요.")
         else:
             with st.spinner(f"'{supp_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
@@ -229,7 +230,6 @@ with tab2:
         with st.expander(f"💊 {st.session_state['supp_ai_result_name']} 상세 정보 확인하기", expanded=True):
             st.markdown(st.session_state["supp_ai_result"])
 
-    # 직접 입력 또는 AI 조회 후 등록 폼 표시
     show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
 
     if show_form:
