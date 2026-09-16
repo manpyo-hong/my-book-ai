@@ -131,7 +131,7 @@ def delete_supplement_from_sheet(item_id):
     call_apps_script("delete", {"id": item_id})
 
 
-def ai_lookup(name: str) -> str:
+def ai_lookup(name: str):
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
@@ -144,6 +144,8 @@ def ai_lookup(name: str) -> str:
     2. 국내(식약처 기준) 1일 표준 권장 용량 (또는 최대 섭취량)
     3. 주의사항
     위 내용을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
+    그리고 답변의 맨 마지막 줄에 정확히 다음 형식으로만 표준 용량만 따로 적어주세요 (예: 20mg 또는 하루 1~2정 등):
+    STANDARD_DOSAGE: [표준 용량 값]
     """
     
     payload = {
@@ -159,7 +161,18 @@ def ai_lookup(name: str) -> str:
         raise Exception(res_json["error"].get("message", "AI 응답 오류"))
         
     try:
-        return res_json["candidates"][0]["content"]["parts"][0]["text"]
+        raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+        
+        # AI 응답에서 표준 용량 자동 추출
+        standard_val = ""
+        clean_lines = []
+        for line in raw_text.split('\n'):
+            if "STANDARD_DOSAGE:" in line:
+                standard_val = line.replace("STANDARD_DOSAGE:", "").strip().strip("[]")
+            else:
+                clean_lines.append(line)
+        
+        return "\n".join(clean_lines).strip(), standard_val
     except Exception:
         raise Exception("AI 응답을 파싱하는 중 오류가 발생했습니다.")
 
@@ -208,7 +221,7 @@ with tab1:
         else:
             with st.spinner(f"'{drug_input}'에 대한 정보를 분석 중입니다..."):
                 try:
-                    ai_result = ai_lookup(drug_input)
+                    ai_result, _ = ai_lookup(drug_input)
                     st.success(f"'{drug_input}' AI 분석 완료!")
                     with st.container(border=True):
                         st.markdown(ai_result)
@@ -238,14 +251,16 @@ with tab2:
         else:
             with st.spinner(f"'{supp_input}'에 대한 정보를 분석 중입니다..."):
                 try:
-                    st.session_state["supp_ai_result"] = ai_lookup(supp_input)
+                    ai_result, standard_val = ai_lookup(supp_input)
+                    st.session_state["supp_ai_result"] = ai_result
                     st.session_state["supp_ai_result_name"] = supp_input
+                    st.session_state["auto_standard"] = standard_val
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {e}")
 
     if st.session_state.get("supp_ai_result"):
         with st.container(border=True):
-            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (국내 표준 권장용량 참고)")
+            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (국내 표준 권장용량 자동 연동됨)")
             st.markdown(st.session_state["supp_ai_result"])
 
     show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
@@ -255,11 +270,19 @@ with tab2:
             st.markdown("#### 📝 복용 정보 입력")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
             
+            # AI 조회 시 자동 추출된 표준 용량이 입력창에 기본값으로 세팅됨
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                f_standard = st.text_input("국내 표준 1일 권장 용량", placeholder="예: 20mg", value="")
+                f_standard = st.text_input(
+                    "국내 표준 1일 권장 용량 (자동입력)", 
+                    value=st.session_state.get("auto_standard", "")
+                )
             with col_f2:
-                f_dosage = st.text_input("내 섭취 용량 (1회/1정)", placeholder="예: 1정 (또는 10mg)", value="")
+                f_dosage = st.text_input(
+                    "내 섭취 용량 (영양제 표기 기준)", 
+                    placeholder="예: 1정, 2캡슐", 
+                    value=""
+                )
                 
             f_eat_times = st.multiselect("먹는 시간 선택", TIME_SLOTS, default=["점심"])
             
@@ -271,7 +294,6 @@ with tab2:
                 else:
                     eat_time_str = ", ".join(f_eat_times) if f_eat_times else "점심"
                     
-                    # 표준 용량과 내 섭취 용량을 깔끔한 형태로 조합
                     std_text = f_standard.strip() if f_standard.strip() else "기준 미기재"
                     my_text = f_dosage.strip() if f_dosage.strip() else "섭취량 미기재"
                     combined_dosage = f"표준: {std_text} | 내 섭취: {my_text}"
@@ -291,6 +313,7 @@ with tab2:
                     st.session_state.supplements.append(new_item)
                     st.session_state.pop("supp_ai_result", None)
                     st.session_state.pop("supp_ai_result_name", None)
+                    st.session_state.pop("auto_standard", None)
                     st.success(f"'{f_name}'이(가) 성공적으로 추가되었습니다!")
                     st.rerun()
 
