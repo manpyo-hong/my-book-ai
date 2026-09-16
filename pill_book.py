@@ -15,7 +15,6 @@ st.set_page_config(
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    # 안정적인 제미나이 플래시 모델 지정
     model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception:
     model = None
@@ -45,7 +44,7 @@ def sheets_enabled() -> bool:
 
 
 def call_apps_script(action, data=None):
-    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수"""
+    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수 (타임아웃 30초로 연장)"""
     url = st.secrets["APPS_SCRIPT_URL"]
     payload = {
         "action": action,
@@ -55,7 +54,8 @@ def call_apps_script(action, data=None):
         payload.update(data)
     
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        # 타임아웃을 30초로 넉넉하게 설정
+        response = requests.post(url, json=payload, timeout=30)
         res_json = response.json()
         if not res_json.get("success"):
             raise Exception(res_json.get("error", "알 수 없는 에러"))
@@ -132,17 +132,17 @@ def ai_lookup(name: str) -> str:
     return response.text
 
 
-# 세션 상태 초기화: 앱이 처음 로드될 때 한 번만 시트에서 불러옴
+# 세션 상태 초기화 및 에러 핸들링
 if "supplements" not in st.session_state:
+    st.session_state.supplements = []
     if sheets_enabled():
         try:
-            st.session_state.supplements = load_supplements_from_sheet()
+            with st.spinner("구글 시트에서 데이터를 불러오는 중입니다... 잠시만 기다려주세요."):
+                st.session_state.supplements = load_supplements_from_sheet()
             st.session_state.sheet_error = None
         except Exception as e:
-            st.session_state.supplements = []
             st.session_state.sheet_error = str(e)
     else:
-        st.session_state.supplements = []
         st.session_state.sheet_error = "not_configured"
 
 
@@ -196,7 +196,12 @@ with tab2:
             "Secrets에 APPS_SCRIPT_URL과 APPS_SCRIPT_SECRET을 추가하면 영구 저장됩니다."
         )
     elif st.session_state.get("sheet_error"):
-        st.error(f"구글 시트 연결에 실패했습니다: {st.session_state['sheet_error']}")
+        st.error(
+            f"⚠️ 구글 시트 연결에 실패했습니다: {st.session_state['sheet_error']}\n\n"
+            "💡 **해결 팁:** 앱스 스크립트 배포 시 **'누가 액세스할 수 있나요?'를 반드시 [모든 사용자(Anyone)]**로 설정하셨는지 확인해 주세요. "
+            "설정이 '나만(Only myself)'이거나 권한 문제일 경우 타임아웃이나 unauthorized 에러가 발생합니다. "
+            "(현재 모드는 임시로 브라우저 세션 내에서만 작동합니다.)"
+        )
 
     st.subheader("영양제 등록")
 
@@ -252,11 +257,11 @@ with tab2:
                         "times": f_times if f_times else ["아침"],
                         "taken": {t: False for t in TIME_SLOTS},
                     }
-                    if sheets_enabled():
+                    if sheets_enabled() and not st.session_state.get("sheet_error"):
                         try:
                             append_supplement_to_sheet(new_item)
                         except Exception as e:
-                            st.error(f"구글 시트 저장에 실패했습니다: {e}")
+                            st.error(f"구글 시트 저장 실패: {e}")
                     st.session_state.supplements.append(new_item)
                     st.session_state.pop("supp_ai_result", None)
                     st.session_state.pop("supp_ai_result_name", None)
@@ -281,11 +286,11 @@ with tab2:
                     )
                 with delete_col:
                     if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
-                        if sheets_enabled():
+                        if sheets_enabled() and not st.session_state.get("sheet_error"):
                             try:
                                 delete_supplement_from_sheet(item["id"])
                             except Exception as e:
-                                st.error(f"구글 시트에서 삭제하지 못했습니다: {e}")
+                                st.error(f"구글 시트 삭제 실패: {e}")
                         st.session_state.supplements = [
                             s for s in st.session_state.supplements if s["id"] != item["id"]
                         ]
@@ -302,11 +307,11 @@ with tab2:
                         )
                         if checked != prev_value:
                             item["taken"][t] = checked
-                            if sheets_enabled():
+                            if sheets_enabled() and not st.session_state.get("sheet_error"):
                                 try:
                                     update_taken_in_sheet(item["id"], item["taken"])
                                 except Exception as e:
-                                    st.error(f"구글 시트 업데이트에 실패했습니다: {e}")
+                                    st.error(f"구글 시트 업데이트 실패: {e}")
 
         taken_count = sum(
             1 for s in st.session_state.supplements for t in s["times"] if s["taken"].get(t)
