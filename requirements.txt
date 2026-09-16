@@ -1,5 +1,6 @@
 google-genai
 streamlit
+requests
 python-pptx
 st_img_pastebutton
 gspread
