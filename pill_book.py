@@ -2,8 +2,7 @@ import streamlit as st
 from google import genai
 from datetime import date
 import uuid
-import gspread
-from google.oauth2.service_account import Credentials
+import requests
 
 # 페이지 설정
 st.set_page_config(
@@ -36,40 +35,40 @@ div.element-container {
 """, unsafe_allow_html=True)
 
 TIME_SLOTS = ["아침", "점심", "저녁", "취침 전"]
-SHEET_HEADER = ["id", "name", "dosage", "start_date", "times", "taken_date"] + TIME_SLOTS
 
 
-# ---------------- 구글 시트 연동 ----------------
-@st.cache_resource
-def get_worksheet():
-    """서비스 계정으로 인증하고 영양제 시트를 반환. 시트가 없으면 새로 만듦."""
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
-    try:
-        ws = sh.worksheet("supplements")
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title="supplements", rows=200, cols=len(SHEET_HEADER))
-        ws.append_row(SHEET_HEADER)
-    return ws
-
-
+# ---------------- 구글 앱스 스크립트 연동 ----------------
 def sheets_enabled() -> bool:
-    return "GOOGLE_SHEET_ID" in st.secrets and "gcp_service_account" in st.secrets
+    return "APPS_SCRIPT_URL" in st.secrets and "APPS_SCRIPT_SECRET" in st.secrets
+
+
+def call_apps_script(action, data=None):
+    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수"""
+    url = st.secrets["APPS_SCRIPT_URL"]
+    payload = {
+        "action": action,
+        "secret": st.secrets["APPS_SCRIPT_SECRET"]
+    }
+    if data:
+        payload.update(data)
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        res_json = response.json()
+        if not res_json.get("success"):
+            raise Exception(res_json.get("error", "알 수 없는 에러"))
+        return res_json.get("data")
+    except Exception as e:
+        raise Exception(f"앱스 스크립트 통신 오류: {e}")
 
 
 def load_supplements_from_sheet():
-    """시트의 모든 행을 읽어서 앱에서 쓰는 형태로 변환. 오늘 날짜가 아니면 체크 상태는 초기화된 것으로 취급."""
-    ws = get_worksheet()
-    records = ws.get_all_records()
+    """앱스 스크립트를 통해 시트 데이터 불러오기"""
+    rows = call_apps_script("get_all")
     today = date.today().isoformat()
     supplements = []
-    for r in records:
+    
+    for r in rows:
         if not r.get("id"):
             continue
         times = [t for t in str(r.get("times", "")).split(",") if t]
@@ -78,6 +77,7 @@ def load_supplements_from_sheet():
         for t in TIME_SLOTS:
             raw = r.get(t, "")
             taken[t] = (taken_date == today) and str(raw).upper() == "TRUE"
+            
         supplements.append({
             "id": r["id"],
             "name": r.get("name", ""),
@@ -90,32 +90,31 @@ def load_supplements_from_sheet():
 
 
 def append_supplement_to_sheet(item):
-    ws = get_worksheet()
-    row = [
-        item["id"], item["name"], item["dosage"], item["start_date"],
-        ",".join(item["times"]), "",
-    ] + ["" for _ in TIME_SLOTS]
-    ws.append_row(row)
+    """새 영양제 등록"""
+    call_apps_script("add", {
+        "id": item["id"],
+        "name": item["name"],
+        "dosage": item["dosage"],
+        "start_date": item["start_date"],
+        "times": ",".join(item["times"])
+    })
 
 
 def delete_supplement_from_sheet(item_id):
-    ws = get_worksheet()
-    cell = ws.find(item_id)
-    if cell:
-        ws.delete_rows(cell.row)
+    """영양제 삭제"""
+    call_apps_script("delete", {"id": item_id})
 
 
 def update_taken_in_sheet(item_id, taken_dict):
-    ws = get_worksheet()
-    cell = ws.find(item_id)
-    if not cell:
-        return
-    header = ws.row_values(1)
+    """복용 체크 상태 업데이트"""
     today = date.today().isoformat()
-    ws.update_cell(cell.row, header.index("taken_date") + 1, today)
+    data = {
+        "id": item_id,
+        "taken_date": today
+    }
     for t in TIME_SLOTS:
-        col = header.index(t) + 1
-        ws.update_cell(cell.row, col, "TRUE" if taken_dict.get(t) else "FALSE")
+        data[t] = "TRUE" if taken_dict.get(t) else "FALSE"
+    call_apps_script("update_taken", data)
 
 
 def ai_lookup(name: str) -> str:
@@ -125,7 +124,7 @@ def ai_lookup(name: str) -> str:
     효능/효과, 권장 복용 방법, 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
     """
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-2.5-flash',
         contents=prompt,
     )
     return response.text
@@ -192,7 +191,7 @@ with tab2:
     if st.session_state.get("sheet_error") == "not_configured":
         st.info(
             "구글 시트 연동이 설정되지 않아 지금은 이 브라우저 세션에만 임시로 저장됩니다. "
-            "Secrets에 GOOGLE_SHEET_ID와 gcp_service_account를 추가하면 영구 저장됩니다."
+            "Secrets에 APPS_SCRIPT_URL과 APPS_SCRIPT_SECRET을 추가하면 영구 저장됩니다."
         )
     elif st.session_state.get("sheet_error"):
         st.error(f"구글 시트 연결에 실패했습니다: {st.session_state['sheet_error']}")
