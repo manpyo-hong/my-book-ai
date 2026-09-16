@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# 🎨 컴팩트하고 세련된 카드 디자인을 위한 CSS
+# 🎨 컴팩트하고 세련된 카드 디자인 및 미니 삭제 버튼 CSS
 st.markdown("""
     <style>
     .main {
@@ -45,6 +45,22 @@ st.markdown("""
         border-radius: 12px;
         font-size: 0.8rem;
         font-weight: 500;
+    }
+    /* 미니 삭제 버튼 커스텀 (약이름 높이에 맞춤) */
+    div[data-testid="column"] button {
+        padding: 2px 8px !important;
+        font-size: 0.75rem !important;
+        min-height: unset !important;
+        height: 30px !important;
+        background-color: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+    }
+    div[data-testid="column"] button:hover {
+        background-color: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -86,7 +102,6 @@ def load_supplements_from_sheet():
         if not r.get("id"):
             continue
         
-        # 💡 날짜 데이터에서 '연도-월-일' (앞 10글자)만 깔끔하게 추출
         raw_date = str(r.get("start_date", ""))
         clean_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
 
@@ -270,7 +285,7 @@ with tab2:
     else:
         for item in st.session_state.supplements:
             with st.container(border=True):
-                c_info, c_btn = st.columns([8, 2])
+                c_info, c_btn = st.columns([9, 1])
                 with c_info:
                     st.markdown(
                         f"**{item['name']}** &nbsp; "
