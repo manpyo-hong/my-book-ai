@@ -10,10 +10,9 @@ st.set_page_config(
     layout="centered"
 )
 
-# 🎨 커스텀 CSS로 디자인 예쁘게 꾸미기
+# 🎨 컴팩트하고 세련된 카드 디자인을 위한 CSS
 st.markdown("""
     <style>
-    /* 전체 폰트 및 배경 여백 조정 */
     .main {
         background-color: #f8fafc;
     }
@@ -26,36 +25,26 @@ st.markdown("""
         color: #334155;
         font-weight: 700;
     }
-    /* 카드 컴포넌트 스타일 */
-    .supplement-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 16px 20px;
-        margin-bottom: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        transition: all 0.2s ease-in-out;
-    }
-    .supplement-card:hover {
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        border-color: #cbd5e1;
+    /* 영양제 카드 컨테이너 간격 밀착 */
+    .stHorizontalBlock {
+        align-items: center;
     }
     /* 시간대 배지 스타일 */
     .badge-time {
         background-color: #e0f2fe;
         color: #0284c7;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
         font-weight: 600;
-        margin-right: 6px;
+        margin-right: 4px;
     }
     .badge-dosage {
         background-color: #f1f5f9;
         color: #475569;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
         font-weight: 500;
     }
     </style>
@@ -276,30 +265,25 @@ with tab2:
         st.info("아직 등록된 영양제가 없습니다. 위에서 영양제를 추가해보세요.")
     else:
         for item in st.session_state.supplements:
-            # 커스텀 카드 디자인 적용
-            st.markdown(f"""
-                <div class="supplement-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-size: 1.1rem; font-weight: 700; color: #1e293b;">{item['name']}</span><br><br>
-                            <span class="badge-time">🕒 {item.get('eat_time', '점심')}</span>
-                            <span class="badge-dosage">💊 {item['dosage'] or '섭취량 미입력'}</span>
-                            <span style="color: #94a3b8; font-size: 0.8rem; margin-left: 8px;">({item['start_date']} 시작)</span>
-                        </div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Streamlit 버튼은 HTML 내부에 넣을 수 없으므로 바로 아래에 배치
-            col_space, col_btn = [st.columns([5, 1])[0], st.columns([5, 1])[1]]
-            with col_btn:
-                if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
-                    if sheets_enabled() and not st.session_state.get("sheet_error"):
-                        try:
-                            delete_supplement_from_sheet(item["id"])
-                        except Exception as e:
-                            st.error(f"구글 시트 삭제 실패: {e}")
-                    st.session_state.supplements = [
-                        s for s in st.session_state.supplements if s["id"] != item["id"]
-                    ]
-                    st.rerun()
+            # 카드를 하나의 행으로 구성하여 이름/정보와 삭제 버튼을 좌우로 밀착 배치
+            with st.container(border=True):
+                c_info, c_btn = st.columns([8, 2])
+                with c_info:
+                    st.markdown(
+                        f"**{item['name']}** &nbsp; "
+                        f"<span class='badge-time'>🕒 {item.get('eat_time', '점심')}</span>"
+                        f"<span class='badge-dosage'>💊 {item['dosage'] or '섭취량 미입력'}</span>"
+                        f"<span style='color: #94a3b8; font-size: 0.75rem; margin-left: 6px;'>({item['start_date']})</span>",
+                        unsafe_allow_html=True
+                    )
+                with c_btn:
+                    if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
+                        if sheets_enabled() and not st.session_state.get("sheet_error"):
+                            try:
+                                delete_supplement_from_sheet(item["id"])
+                            except Exception as e:
+                                st.error(f"구글 시트 삭제 실패: {e}")
+                        st.session_state.supplements = [
+                            s for s in st.session_state.supplements if s["id"] != item["id"]
+                        ]
+                        st.rerun()
