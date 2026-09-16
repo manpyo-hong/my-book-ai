@@ -107,28 +107,24 @@ def load_supplements_from_sheet():
         raw_date = str(r.get("start_date", ""))
         clean_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
 
-        # 시트에서 표준용량과 내섭취량을 각각 불러오거나, 기존 데이터 호환 처리
         std_val = r.get("standard_dosage", "")
         my_val = r.get("my_dosage", "")
-        legacy_dosage = r.get("dosage", "")
         
-        if not std_val and not my_val and legacy_dosage:
-            # 예전 데이터 형태("표준: ... | 내 섭취: ...")가 있다면 파싱해서 분리
-            if "|" in legacy_dosage:
-                parts = legacy_dosage.split("|")
+        # 구글 시트에 기존에 합쳐진 데이터(dosage)만 있는 경우를 위한 안전 장치
+        if not std_val and not my_val and r.get("dosage"):
+            legacy = r.get("dosage")
+            if "|" in legacy:
+                parts = legacy.split("|")
                 std_val = parts[0].replace("표준:", "").strip()
                 my_val = parts[1].replace("내 섭취:", "").strip()
             else:
-                my_val = legacy_dosage
-
-        dosage_display = f"표준: {std_val or '미기재'} | 내 섭취: {my_val or '미기재'}"
+                my_val = legacy
 
         supplements.append({
             "id": r["id"],
             "name": r.get("name", ""),
             "standard_dosage": std_val,
             "my_dosage": my_val,
-            "dosage": dosage_display,
             "start_date": clean_date,
             "eat_time": r.get("eat_time", ""),
         })
@@ -141,7 +137,6 @@ def append_supplement_to_sheet(item):
         "name": item["name"],
         "standard_dosage": item["standard_dosage"],
         "my_dosage": item["my_dosage"],
-        "dosage": item["dosage"],
         "start_date": item["start_date"],
         "eat_time": item["eat_time"]
     })
@@ -314,14 +309,12 @@ with tab2:
                     
                     std_text = f_standard.strip() if f_standard.strip() else "미기재"
                     my_text = f_dosage.strip() if f_dosage.strip() else "미기재"
-                    combined_dosage = f"표준: {std_text} | 내 섭취: {my_text}"
                     
                     new_item = {
                         "id": str(uuid.uuid4()),
                         "name": f_name.strip(),
                         "standard_dosage": std_text,
                         "my_dosage": my_text,
-                        "dosage": combined_dosage,
                         "start_date": date.today().isoformat(),
                         "eat_time": eat_time_str,
                     }
@@ -347,10 +340,13 @@ with tab2:
             with st.container(border=True):
                 c_info, c_btn = st.columns([9, 1])
                 with c_info:
+                    std_disp = item.get('standard_dosage', '미기재')
+                    my_disp = item.get('my_dosage', '미기재')
                     st.markdown(
                         f"**{item['name']}** &nbsp; "
                         f"<span class='badge-time'>🕒 {item.get('eat_time', '점심')}</span>"
-                        f"<span class='badge-dosage'>💊 {item['dosage']}</span>"
+                        f"<span class='badge-dosage'>국내표준: {std_disp}</span>"
+                        f"<span class='badge-dosage'>내섭취: {my_disp}</span>"
                         f"<span style='color: #94a3b8; font-size: 0.75rem; margin-left: 6px;'>({item['start_date']})</span>",
                         unsafe_allow_html=True
                     )
