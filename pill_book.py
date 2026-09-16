@@ -25,7 +25,6 @@ st.markdown("""
         color: #334155;
         font-weight: 700;
     }
-    /* 영양제 카드 컨테이너 간격 밀착 */
     .stHorizontalBlock {
         align-items: center;
     }
@@ -86,11 +85,16 @@ def load_supplements_from_sheet():
     for r in rows:
         if not r.get("id"):
             continue
+        
+        # 💡 날짜 데이터에서 '연도-월-일' (앞 10글자)만 깔끔하게 추출
+        raw_date = str(r.get("start_date", ""))
+        clean_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
+
         supplements.append({
             "id": r["id"],
             "name": r.get("name", ""),
             "dosage": r.get("dosage", ""),
-            "start_date": r.get("start_date", ""),
+            "start_date": clean_date,
             "eat_time": r.get("eat_time", ""),
         })
     return supplements
@@ -265,7 +269,6 @@ with tab2:
         st.info("아직 등록된 영양제가 없습니다. 위에서 영양제를 추가해보세요.")
     else:
         for item in st.session_state.supplements:
-            # 카드를 하나의 행으로 구성하여 이름/정보와 삭제 버튼을 좌우로 밀착 배치
             with st.container(border=True):
                 c_info, c_btn = st.columns([8, 2])
                 with c_info:
