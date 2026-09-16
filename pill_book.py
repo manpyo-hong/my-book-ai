@@ -5,10 +5,61 @@ import uuid
 
 # 페이지 설정
 st.set_page_config(
-    page_title="복용 기록부",
+    page_title="나만의 복용 기록부",
     page_icon="💊",
     layout="centered"
 )
+
+# 🎨 커스텀 CSS로 디자인 예쁘게 꾸미기
+st.markdown("""
+    <style>
+    /* 전체 폰트 및 배경 여백 조정 */
+    .main {
+        background-color: #f8fafc;
+    }
+    h1 {
+        color: #1e293b;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+    }
+    h3 {
+        color: #334155;
+        font-weight: 700;
+    }
+    /* 카드 컴포넌트 스타일 */
+    .supplement-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        transition: all 0.2s ease-in-out;
+    }
+    .supplement-card:hover {
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        border-color: #cbd5e1;
+    }
+    /* 시간대 배지 스타일 */
+    .badge-time {
+        background-color: #e0f2fe;
+        color: #0284c7;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 6px;
+    }
+    .badge-dosage {
+        background-color: #f1f5f9;
+        color: #475569;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 TIME_SLOTS = ["아침", "점심", "저녁", "취침 전"]
 
@@ -75,7 +126,7 @@ def ai_lookup(name: str) -> str:
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     prompt = f"""
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
@@ -115,35 +166,38 @@ if "supplements" not in st.session_state:
 
 
 # 메인 타이틀
-st.title("복용 기록부")
-st.write("처방약과 영양제를 한 곳에서 정리하고 확인하세요.")
+st.title("💊 스마트 복용 기록부")
+st.markdown("처방약과 영양제를 스마트하게 관리하고 기록하세요.")
 
-st.warning(
-    "이 정보는 AI가 조회한 참고용 자료이며 부정확하거나 최신이 아닐 수 있습니다. "
-    "실제 복용 여부와 병용 가능 여부는 반드시 약사 또는 의사와 상담한 뒤 결정하세요."
-)
+with st.expander("💡 이용 안내 및 주의사항", expanded=False):
+    st.info(
+        "이 정보는 AI가 조회한 참고용 자료이며 부정확하거나 최신이 아닐 수 있습니다. "
+        "실제 복용 여부와 병용 가능 여부는 반드시 약사 또는 의사와 상담한 뒤 결정하세요."
+    )
 
-tab1, tab2 = st.tabs(["처방약", "영양제"])
+st.write("")
+tab1, tab2 = st.tabs(["📋 처방약 검색", "🌿 영양제 관리"])
 
 # ---------------- 처방약 탭 ----------------
 with tab1:
-    col1, col2, col3 = st.columns([3, 1, 1])
+    st.markdown("### 처방약 성분 및 효능 조회")
+    col1, col2, col3 = st.columns([3, 1, 1], vertical_alignment="bottom")
     with col1:
-        drug_input = st.text_input("약 이름 입력", placeholder="예: 타이레놀", label_visibility="collapsed", key="drug_name_input")
+        drug_input = st.text_input("약 이름 입력", placeholder="예: 타이레놀, 아목시실린", label_visibility="collapsed", key="drug_name_input")
     with col2:
-        ai_search = st.button("Q AI로 조회", use_container_width=True, key="drug_ai_search")
+        ai_search = st.button("✨ AI 조회", use_container_width=True, key="drug_ai_search", type="primary")
     with col3:
-        direct_input = st.button("+ 직접 입력", use_container_width=True, key="drug_direct_input")
+        direct_input = st.button("➕ 직접 입력", use_container_width=True, key="drug_direct_input")
 
     if ai_search:
         if not drug_input.strip():
-            st.error("검색할 약 또는 영양제 이름을 입력해주세요.")
+            st.warning("검색할 약 이름을 입력해주세요.")
         else:
-            with st.spinner(f"'{drug_input}'에 대한 정보를 검색 중입니다..."):
+            with st.spinner(f"'{drug_input}'에 대한 정보를 분석 중입니다..."):
                 try:
                     ai_result = ai_lookup(drug_input)
-                    st.success(f"'{drug_input}'에 대한 AI 검색 결과입니다.")
-                    with st.expander(f"💊 {drug_input} 상세 정보 확인하기", expanded=True):
+                    st.success(f"'{drug_input}' AI 분석 완료!")
+                    with st.container(border=True):
                         st.markdown(ai_result)
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {e}")
@@ -151,25 +205,25 @@ with tab1:
 # ---------------- 영양제 탭 ----------------
 with tab2:
     if st.session_state.get("sheet_error") == "not_configured":
-        st.info("구글 시트 연동이 설정되지 않아 브라우저 세션에만 임시로 저장됩니다.")
+        st.info("ℹ️ 구글 시트 연동이 설정되지 않아 브라우저 세션에만 임시로 저장됩니다.")
     elif st.session_state.get("sheet_error"):
         st.error(f"⚠️ 구글 시트 연결 실패: {st.session_state['sheet_error']}")
 
-    st.subheader("영양제 등록")
+    st.markdown("### 영양제 추가하기")
 
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2, col3 = st.columns([3, 1, 1], vertical_alignment="bottom")
     with col1:
         supp_input = st.text_input("영양제 이름 입력", placeholder="예: 오메가3 프리미엄", label_visibility="collapsed", key="supp_name_input")
     with col2:
-        supp_ai_search = st.button("Q AI로 조회", use_container_width=True, key="supp_ai_search")
+        supp_ai_search = st.button("✨ AI 조회", use_container_width=True, key="supp_ai_search", type="primary")
     with col3:
-        supp_direct_input = st.button("+ 직접 입력", use_container_width=True, key="supp_direct_input")
+        supp_direct_input = st.button("➕ 직접 등록", use_container_width=True, key="supp_direct_input")
 
     if supp_ai_search:
         if not supp_input.strip():
-            st.error("검색할 영양제 이름을 입력해주세요.")
+            st.warning("검색할 영양제 이름을 입력해주세요.")
         else:
-            with st.spinner(f"'{supp_input}'에 대한 정보를 검색 중입니다..."):
+            with st.spinner(f"'{supp_input}'에 대한 정보를 분석 중입니다..."):
                 try:
                     st.session_state["supp_ai_result"] = ai_lookup(supp_input)
                     st.session_state["supp_ai_result_name"] = supp_input
@@ -177,19 +231,20 @@ with tab2:
                     st.error(f"오류가 발생했습니다: {e}")
 
     if st.session_state.get("supp_ai_result"):
-        with st.expander(f"💊 {st.session_state['supp_ai_result_name']} 상세 정보 확인하기", expanded=True):
+        with st.container(border=True):
+            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보")
             st.markdown(st.session_state["supp_ai_result"])
 
     show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
 
     if show_form:
         with st.form("add_supplement_form", clear_on_submit=True):
-            st.write("복용 중인 목록에 추가하기")
+            st.markdown("#### 📝 복용 정보 입력")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
-            f_dosage = st.text_input("1회 섭취량 (예: 1정, 2캡슐)", value="")
-            # 멀티셀렉트로 복수 선택 가능 (예: 점심, 저녁)
-            f_eat_times = st.multiselect("먹는 시간", TIME_SLOTS, default=["점심"])
-            submitted = st.form_submit_button("등록하기")
+            f_dosage = st.text_input("1회 섭취량", placeholder="예: 1정, 2캡슐", value="")
+            f_eat_times = st.multiselect("먹는 시간 선택", TIME_SLOTS, default=["점심"])
+            
+            submitted = st.form_submit_button("저장하기", type="primary", use_container_width=True)
 
             if submitted:
                 if not f_name.strip():
@@ -211,33 +266,40 @@ with tab2:
                     st.session_state.supplements.append(new_item)
                     st.session_state.pop("supp_ai_result", None)
                     st.session_state.pop("supp_ai_result_name", None)
-                    st.success(f"'{f_name}'이(가) 목록에 추가되었습니다.")
+                    st.success(f"'{f_name}'이(가) 성공적으로 추가되었습니다!")
                     st.rerun()
 
     st.divider()
-    st.subheader("복용 중인 영양제")
+    st.markdown("### 📋 복용 중인 영양제 목록")
 
     if not st.session_state.supplements:
         st.info("아직 등록된 영양제가 없습니다. 위에서 영양제를 추가해보세요.")
     else:
         for item in st.session_state.supplements:
-            with st.container(border=True):
-                header_col, delete_col = st.columns([6, 1])
-                with header_col:
-                    st.markdown(
-                        f"**{item['name']}** · {item['dosage'] or '섭취량 미입력'} "
-                        f"&nbsp;<span style='color:#0284c7;font-weight:bold;'>[{item.get('eat_time', '점심')}]</span> "
-                        f"&nbsp;<span style='color:#888;font-size:0.8rem'>({item['start_date']} 시작)</span>",
-                        unsafe_allow_html=True
-                    )
-                with delete_col:
-                    if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
-                        if sheets_enabled() and not st.session_state.get("sheet_error"):
-                            try:
-                                delete_supplement_from_sheet(item["id"])
-                            except Exception as e:
-                                st.error(f"구글 시트 삭제 실패: {e}")
-                        st.session_state.supplements = [
-                            s for s in st.session_state.supplements if s["id"] != item["id"]
-                        ]
-                        st.rerun()
+            # 커스텀 카드 디자인 적용
+            st.markdown(f"""
+                <div class="supplement-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-size: 1.1rem; font-weight: 700; color: #1e293b;">{item['name']}</span><br><br>
+                            <span class="badge-time">🕒 {item.get('eat_time', '점심')}</span>
+                            <span class="badge-dosage">💊 {item['dosage'] or '섭취량 미입력'}</span>
+                            <span style="color: #94a3b8; font-size: 0.8rem; margin-left: 8px;">({item['start_date']} 시작)</span>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Streamlit 버튼은 HTML 내부에 넣을 수 없으므로 바로 아래에 배치
+            col_space, col_btn = [st.columns([5, 1])[0], st.columns([5, 1])[1]]
+            with col_btn:
+                if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
+                    if sheets_enabled() and not st.session_state.get("sheet_error"):
+                        try:
+                            delete_supplement_from_sheet(item["id"])
+                        except Exception as e:
+                            st.error(f"구글 시트 삭제 실패: {e}")
+                    st.session_state.supplements = [
+                        s for s in st.session_state.supplements if s["id"] != item["id"]
+                    ]
+                    st.rerun()
