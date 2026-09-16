@@ -12,7 +12,7 @@ st.set_page_config(
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     # 안정적인 텍스트 생성 모델 지정
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
 except Exception:
     model = None
 
