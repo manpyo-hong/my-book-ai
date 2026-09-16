@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# 🎨 컴팩트하고 세련된 카드 디자인 및 미니 삭제 버튼 CSS
+# 🎨 디자인 및 배지 스타일 CSS
 st.markdown("""
     <style>
     .main {
@@ -38,6 +38,7 @@ st.markdown("""
         font-weight: 600;
         margin-right: 4px;
     }
+    /* 용량 비교 배지 스타일 */
     .badge-dosage {
         background-color: #f1f5f9;
         color: #475569;
@@ -45,8 +46,9 @@ st.markdown("""
         border-radius: 12px;
         font-size: 0.8rem;
         font-weight: 500;
+        margin-right: 4px;
     }
-    /* 미니 삭제 버튼 커스텀 (약이름 높이에 맞춤) */
+    /* 미니 삭제 버튼 커스텀 */
     div[data-testid="column"] button {
         padding: 2px 8px !important;
         font-size: 0.75rem !important;
@@ -134,12 +136,11 @@ def ai_lookup(name: str) -> str:
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
     
-    # 💡 최신 모델명(gemini-3.6-flash)으로 업데이트
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     
     prompt = f"""
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
-    효능/효과, 권장 복용 방법, 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
+    효능/효과, 권장 복용 방법(1일 권장 용량 포함), 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
     """
     
     payload = {
@@ -241,7 +242,7 @@ with tab2:
 
     if st.session_state.get("supp_ai_result"):
         with st.container(border=True):
-            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보")
+            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (권장 용량 확인)")
             st.markdown(st.session_state["supp_ai_result"])
 
     show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
@@ -250,7 +251,14 @@ with tab2:
         with st.form("add_supplement_form", clear_on_submit=True):
             st.markdown("#### 📝 복용 정보 입력")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
-            f_dosage = st.text_input("1회 섭취량", placeholder="예: 1정, 2캡슐", value="")
+            
+            # 입력 편의를 위해 권장 용량과 1정 용량을 구분해서 입력받도록 구성
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                f_recommended = st.text_input("1일 권장 용량", placeholder="예: 1일 2정 또는 1000mg", value="")
+            with col_f2:
+                f_dosage = st.text_input("등록된 영양제 1정 용량", placeholder="예: 1정, 2캡슐", value="")
+                
             f_eat_times = st.multiselect("먹는 시간 선택", TIME_SLOTS, default=["점심"])
             
             submitted = st.form_submit_button("저장하기", type="primary", use_container_width=True)
@@ -260,10 +268,13 @@ with tab2:
                     st.error("영양제 이름을 입력해주세요.")
                 else:
                     eat_time_str = ", ".join(f_eat_times) if f_eat_times else "점심"
+                    # 권장 용량과 1정 용량을 보기 좋게 합쳐서 dosage 칸에 저장
+                    combined_dosage = f"권장: {f_recommended.strip()} | 1정: {f_dosage.strip()}" if f_recommended.strip() else (f_dosage.strip() or "섭취량 미입력")
+                    
                     new_item = {
                         "id": str(uuid.uuid4()),
                         "name": f_name.strip(),
-                        "dosage": f_dosage.strip(),
+                        "dosage": combined_dosage,
                         "start_date": date.today().isoformat(),
                         "eat_time": eat_time_str,
                     }
@@ -291,7 +302,7 @@ with tab2:
                     st.markdown(
                         f"**{item['name']}** &nbsp; "
                         f"<span class='badge-time'>🕒 {item.get('eat_time', '점심')}</span>"
-                        f"<span class='badge-dosage'>💊 {item['dosage'] or '섭취량 미입력'}</span>"
+                        f"<span class='badge-dosage'>💊 {item['dosage']}</span>"
                         f"<span style='color: #94a3b8; font-size: 0.75rem; margin-left: 6px;'>({item['start_date']})</span>",
                         unsafe_allow_html=True
                     )
