@@ -1,8 +1,7 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
 from datetime import date
 import uuid
-import requests
 
 # 페이지 설정
 st.set_page_config(
@@ -10,14 +9,6 @@ st.set_page_config(
     page_icon="💊",
     layout="centered"
 )
-
-# Gemini API 설정 (Streamlit Secrets에서 키 가져오기)
-try:
-    api_key = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except Exception:
-    model = None
 
 # 카드 간격을 줄이기 위한 커스텀 CSS
 st.markdown("""
@@ -44,7 +35,7 @@ def sheets_enabled() -> bool:
 
 
 def call_apps_script(action, data=None):
-    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수 (타임아웃 30초로 연장)"""
+    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수"""
     url = st.secrets["APPS_SCRIPT_URL"]
     payload = {
         "action": action,
@@ -54,7 +45,6 @@ def call_apps_script(action, data=None):
         payload.update(data)
     
     try:
-        # 타임아웃을 30초로 넉넉하게 설정
         response = requests.post(url, json=payload, timeout=30)
         res_json = response.json()
         if not res_json.get("success"):
@@ -123,13 +113,35 @@ def update_taken_in_sheet(item_id, taken_dict):
 
 
 def ai_lookup(name: str) -> str:
-    """Gemini에게 약/영양제 정보를 물어보고 마크다운 텍스트를 반환"""
+    """REST API 직접 호출 방식으로 인증 에러 없이 안전하게 Gemini 결과 받아오기"""
+    api_key = st.secrets.get("GEMINI_API_KEY")
+    if not api_key:
+        raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
+    
+    # Vertex AI 오인 문제를 완벽히 우회하기 위한 Google AI Studio 공식 REST API 호출
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
     prompt = f"""
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
     효능/효과, 권장 복용 방법, 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
     """
-    response = model.generate_content(prompt)
-    return response.text
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    response = requests.post(url, json=payload, timeout=30)
+    res_json = response.json()
+    
+    if "error" in res_json:
+        raise Exception(res_json["error"].get("message", "AI 응답 오류"))
+        
+    try:
+        return res_json["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        raise Exception("AI 응답을 파싱하는 중 오류가 발생했습니다.")
 
 
 # 세션 상태 초기화 및 에러 핸들링
@@ -137,7 +149,7 @@ if "supplements" not in st.session_state:
     st.session_state.supplements = []
     if sheets_enabled():
         try:
-            with st.spinner("구글 시트에서 데이터를 불러오는 중입니다... 잠시만 기다려주세요."):
+            with st.spinner("구글 시트에서 데이터를 불러오는 중입니다..."):
                 st.session_state.supplements = load_supplements_from_sheet()
             st.session_state.sheet_error = None
         except Exception as e:
@@ -176,8 +188,6 @@ with tab1:
     if ai_search:
         if not drug_input.strip():
             st.error("검색할 약 또는 영양제 이름을 입력해주세요.")
-        elif not model:
-            st.error("Gemini API 키가 설정되지 않았거나 올바르지 않습니다. Streamlit Secrets를 확인해주세요.")
         else:
             with st.spinner(f"'{drug_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
                 try:
@@ -198,9 +208,7 @@ with tab2:
     elif st.session_state.get("sheet_error"):
         st.error(
             f"⚠️ 구글 시트 연결에 실패했습니다: {st.session_state['sheet_error']}\n\n"
-            "💡 **해결 팁:** 앱스 스크립트 배포 시 **'누가 액세스할 수 있나요?'를 반드시 [모든 사용자(Anyone)]**로 설정하셨는지 확인해 주세요. "
-            "설정이 '나만(Only myself)'이거나 권한 문제일 경우 타임아웃이나 unauthorized 에러가 발생합니다. "
-            "(현재 모드는 임시로 브라우저 세션 내에서만 작동합니다.)"
+            "💡 **해결 팁:** 앱스 스크립트 배포 시 **'누가 액세스할 수 있나요?'를 반드시 [모든 사용자(Anyone)]**로 설정하셨는지 확인해 주세요."
         )
 
     st.subheader("영양제 등록")
@@ -221,8 +229,6 @@ with tab2:
     if supp_ai_search:
         if not supp_input.strip():
             st.error("검색할 영양제 이름을 입력해주세요.")
-        elif not model:
-            st.error("Gemini API 키가 설정되지 않았거나 올바르지 않습니다. Streamlit Secrets를 확인해주세요.")
         else:
             with st.spinner(f"'{supp_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
                 try:
