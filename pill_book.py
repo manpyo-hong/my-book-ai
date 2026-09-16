@@ -113,13 +113,13 @@ def update_taken_in_sheet(item_id, taken_dict):
 
 
 def ai_lookup(name: str) -> str:
-    """REST API 직접 호출 방식으로 인증 에러 없이 안전하게 Gemini 결과 받아오기"""
+    """최신 Gemini 모델 REST API 호출"""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
     
-    # Vertex AI 오인 문제를 완벽히 우회하기 위한 Google AI Studio 공식 REST API 호출
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # 최신 표준 모델명 (gemini-2.5-flash) 사용
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     prompt = f"""
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
