@@ -10,22 +10,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# 카드 간격을 줄이기 위한 커스텀 CSS
-st.markdown("""
-<style>
-[data-testid="stVerticalBlockBorderWrapper"] {
-    padding: 0.6rem 1rem !important;
-}
-div.element-container {
-    margin-bottom: 0.1rem !important;
-}
-[data-testid="stCheckbox"] {
-    margin-top: -0.3rem;
-    margin-bottom: -0.6rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
 TIME_SLOTS = ["아침", "점심", "저녁", "취침 전"]
 
 
@@ -35,7 +19,6 @@ def sheets_enabled() -> bool:
 
 
 def call_apps_script(action, data=None):
-    """앱스 스크립트 웹 앱으로 HTTP 요청을 보내는 함수"""
     url = st.secrets["APPS_SCRIPT_URL"]
     payload = {
         "action": action,
@@ -55,70 +38,43 @@ def call_apps_script(action, data=None):
 
 
 def load_supplements_from_sheet():
-    """앱스 스크립트를 통해 시트 데이터 불러오기"""
     rows = call_apps_script("get_all")
-    today = date.today().isoformat()
     supplements = []
-    
     if not rows:
         return []
 
     for r in rows:
         if not r.get("id"):
             continue
-        times = [t for t in str(r.get("times", "")).split(",") if t]
-        taken_date = str(r.get("taken_date", ""))
-        taken = {}
-        for t in TIME_SLOTS:
-            raw = r.get(t, "")
-            taken[t] = (taken_date == today) and str(raw).upper() == "TRUE"
-            
         supplements.append({
             "id": r["id"],
             "name": r.get("name", ""),
             "dosage": r.get("dosage", ""),
             "start_date": r.get("start_date", ""),
-            "times": times if times else ["아침"],
-            "taken": taken,
+            "eat_time": r.get("eat_time", ""),
         })
     return supplements
 
 
 def append_supplement_to_sheet(item):
-    """새 영양제 등록"""
     call_apps_script("add", {
         "id": item["id"],
         "name": item["name"],
         "dosage": item["dosage"],
         "start_date": item["start_date"],
-        "times": ",".join(item["times"])
+        "eat_time": item["eat_time"]
     })
 
 
 def delete_supplement_from_sheet(item_id):
-    """영양제 삭제"""
     call_apps_script("delete", {"id": item_id})
 
 
-def update_taken_in_sheet(item_id, taken_dict):
-    """복용 체크 상태 업데이트"""
-    today = date.today().isoformat()
-    data = {
-        "id": item_id,
-        "taken_date": today
-    }
-    for t in TIME_SLOTS:
-        data[t] = "TRUE" if taken_dict.get(t) else "FALSE"
-    call_apps_script("update_taken", data)
-
-
 def ai_lookup(name: str) -> str:
-    """최신 Gemini 모델 REST API 호출"""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
     
-    # 에러 메시지에서 요구하는 최신 모델명으로 변경
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     
     prompt = f"""
@@ -144,7 +100,7 @@ def ai_lookup(name: str) -> str:
         raise Exception("AI 응답을 파싱하는 중 오류가 발생했습니다.")
 
 
-# 세션 상태 초기화 및 에러 핸들링
+# 세션 상태 초기화
 if "supplements" not in st.session_state:
     st.session_state.supplements = []
     if sheets_enabled():
@@ -158,7 +114,7 @@ if "supplements" not in st.session_state:
         st.session_state.sheet_error = "not_configured"
 
 
-# 메인 타이틀 및 설명
+# 메인 타이틀
 st.title("복용 기록부")
 st.write("처방약과 영양제를 한 곳에서 정리하고 확인하세요.")
 
@@ -172,14 +128,8 @@ tab1, tab2 = st.tabs(["처방약", "영양제"])
 # ---------------- 처방약 탭 ----------------
 with tab1:
     col1, col2, col3 = st.columns([3, 1, 1])
-
     with col1:
-        drug_input = st.text_input(
-            "약 이름 입력",
-            placeholder="예: 타이레놀 또는 오메가3",
-            label_visibility="collapsed",
-            key="drug_name_input"
-        )
+        drug_input = st.text_input("약 이름 입력", placeholder="예: 타이레놀", label_visibility="collapsed", key="drug_name_input")
     with col2:
         ai_search = st.button("Q AI로 조회", use_container_width=True, key="drug_ai_search")
     with col3:
@@ -189,7 +139,7 @@ with tab1:
         if not drug_input.strip():
             st.error("검색할 약 또는 영양제 이름을 입력해주세요.")
         else:
-            with st.spinner(f"'{drug_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
+            with st.spinner(f"'{drug_input}'에 대한 정보를 검색 중입니다..."):
                 try:
                     ai_result = ai_lookup(drug_input)
                     st.success(f"'{drug_input}'에 대한 AI 검색 결과입니다.")
@@ -201,26 +151,15 @@ with tab1:
 # ---------------- 영양제 탭 ----------------
 with tab2:
     if st.session_state.get("sheet_error") == "not_configured":
-        st.info(
-            "구글 시트 연동이 설정되지 않아 지금은 이 브라우저 세션에만 임시로 저장됩니다. "
-            "Secrets에 APPS_SCRIPT_URL과 APPS_SCRIPT_SECRET을 추가하면 영구 저장됩니다."
-        )
+        st.info("구글 시트 연동이 설정되지 않아 브라우저 세션에만 임시로 저장됩니다.")
     elif st.session_state.get("sheet_error"):
-        st.error(
-            f"⚠️ 구글 시트 연결에 실패했습니다: {st.session_state['sheet_error']}\n\n"
-            "💡 **해결 팁:** 앱스 스크립트 배포 시 **'누가 액세스할 수 있나요?'를 반드시 [모든 사용자(Anyone)]**로 설정하셨는지 확인해 주세요."
-        )
+        st.error(f"⚠️ 구글 시트 연결 실패: {st.session_state['sheet_error']}")
 
     st.subheader("영양제 등록")
 
     col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        supp_input = st.text_input(
-            "영양제 이름 입력",
-            placeholder="예: 오메가3 프리미엄",
-            label_visibility="collapsed",
-            key="supp_name_input"
-        )
+        supp_input = st.text_input("영양제 이름 입력", placeholder="예: 오메가3 프리미엄", label_visibility="collapsed", key="supp_name_input")
     with col2:
         supp_ai_search = st.button("Q AI로 조회", use_container_width=True, key="supp_ai_search")
     with col3:
@@ -230,7 +169,7 @@ with tab2:
         if not supp_input.strip():
             st.error("검색할 영양제 이름을 입력해주세요.")
         else:
-            with st.spinner(f"'{supp_input}'에 대한 정보를 Gemini AI가 검색 중입니다..."):
+            with st.spinner(f"'{supp_input}'에 대한 정보를 검색 중입니다..."):
                 try:
                     st.session_state["supp_ai_result"] = ai_lookup(supp_input)
                     st.session_state["supp_ai_result_name"] = supp_input
@@ -248,20 +187,21 @@ with tab2:
             st.write("복용 중인 목록에 추가하기")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
             f_dosage = st.text_input("1회 섭취량 (예: 1정, 2캡슐)", value="")
-            f_times = st.multiselect("섭취 시간대", TIME_SLOTS, default=["아침"])
+            # 멀티셀렉트로 복수 선택 가능 (예: 점심, 저녁)
+            f_eat_times = st.multiselect("먹는 시간", TIME_SLOTS, default=["점심"])
             submitted = st.form_submit_button("등록하기")
 
             if submitted:
                 if not f_name.strip():
                     st.error("영양제 이름을 입력해주세요.")
                 else:
+                    eat_time_str = ", ".join(f_eat_times) if f_eat_times else "점심"
                     new_item = {
                         "id": str(uuid.uuid4()),
                         "name": f_name.strip(),
                         "dosage": f_dosage.strip(),
                         "start_date": date.today().isoformat(),
-                        "times": f_times if f_times else ["아침"],
-                        "taken": {t: False for t in TIME_SLOTS},
+                        "eat_time": eat_time_str,
                     }
                     if sheets_enabled() and not st.session_state.get("sheet_error"):
                         try:
@@ -278,7 +218,7 @@ with tab2:
     st.subheader("복용 중인 영양제")
 
     if not st.session_state.supplements:
-        st.info("아직 등록된 영양제가 없습니다. 위에서 AI 조회 또는 직접 입력으로 추가해보세요.")
+        st.info("아직 등록된 영양제가 없습니다. 위에서 영양제를 추가해보세요.")
     else:
         for item in st.session_state.supplements:
             with st.container(border=True):
@@ -286,8 +226,8 @@ with tab2:
                 with header_col:
                     st.markdown(
                         f"**{item['name']}** · {item['dosage'] or '섭취량 미입력'} "
-                        f"&nbsp;<span style='color:#888;font-size:0.8rem'>"
-                        f"{item['start_date']} · {', '.join(item['times'])}</span>",
+                        f"&nbsp;<span style='color:#0284c7;font-weight:bold;'>[{item.get('eat_time', '점심')}]</span> "
+                        f"&nbsp;<span style='color:#888;font-size:0.8rem'>({item['start_date']} 시작)</span>",
                         unsafe_allow_html=True
                     )
                 with delete_col:
@@ -301,27 +241,3 @@ with tab2:
                             s for s in st.session_state.supplements if s["id"] != item["id"]
                         ]
                         st.rerun()
-
-                check_cols = st.columns(len(item["times"]) if item["times"] else 1)
-                for i, t in enumerate(item["times"]):
-                    with check_cols[i]:
-                        prev_value = item["taken"].get(t, False)
-                        checked = st.checkbox(
-                            t,
-                            value=prev_value,
-                            key=f"check_{item['id']}_{t}"
-                        )
-                        if checked != prev_value:
-                            item["taken"][t] = checked
-                            if sheets_enabled() and not st.session_state.get("sheet_error"):
-                                try:
-                                    update_taken_in_sheet(item["id"], item["taken"])
-                                except Exception as e:
-                                    st.error(f"구글 시트 업데이트 실패: {e}")
-
-        taken_count = sum(
-            1 for s in st.session_state.supplements for t in s["times"] if s["taken"].get(t)
-        )
-        total_count = sum(len(s["times"]) for s in st.session_state.supplements)
-        if total_count > 0:
-            st.progress(taken_count / total_count, text=f"오늘 섭취 {taken_count}/{total_count} 완료")
