@@ -56,7 +56,7 @@ with tab1:
                     
                     # 최신 모델명(gemini-2.5-flash 또는 gemini-2.0-flash) 사용
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3.6-flash',
                         contents=prompt,
                     )
                     ai_result = response.text
