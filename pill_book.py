@@ -139,8 +139,11 @@ def ai_lookup(name: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     
     prompt = f"""
-    당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
-    효능/효과, 권장 복용 방법(1일 권장 용량 포함), 주의사항을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
+    당신은 전문 약사입니다. 다음 성분 또는 영양제에 대해 알려주세요: {name}
+    1. 효능/효과
+    2. 국내(식약처 기준) 1일 표준 권장 용량 (또는 최대 섭취량)
+    3. 주의사항
+    위 내용을 포함하여 간결하고 명확하게 마크다운 형식으로 정리해 주세요.
     """
     
     payload = {
@@ -223,7 +226,7 @@ with tab2:
 
     col1, col2, col3 = st.columns([3, 1, 1], vertical_alignment="bottom")
     with col1:
-        supp_input = st.text_input("영양제 이름 입력", placeholder="예: 오메가3 프리미엄", label_visibility="collapsed", key="supp_name_input")
+        supp_input = st.text_input("영양제 이름 입력", placeholder="예: 루테인지아잔틴 미니", label_visibility="collapsed", key="supp_name_input")
     with col2:
         supp_ai_search = st.button("✨ AI 조회", use_container_width=True, key="supp_ai_search", type="primary")
     with col3:
@@ -242,7 +245,7 @@ with tab2:
 
     if st.session_state.get("supp_ai_result"):
         with st.container(border=True):
-            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (권장 용량 확인)")
+            st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (국내 표준 권장용량 참고)")
             st.markdown(st.session_state["supp_ai_result"])
 
     show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
@@ -252,12 +255,11 @@ with tab2:
             st.markdown("#### 📝 복용 정보 입력")
             f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
             
-            # 입력 편의를 위해 권장 용량과 1정 용량을 구분해서 입력받도록 구성
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                f_recommended = st.text_input("1일 권장 용량", placeholder="예: 1일 2정 또는 1000mg", value="")
+                f_standard = st.text_input("국내 표준 1일 권장 용량", placeholder="예: 20mg", value="")
             with col_f2:
-                f_dosage = st.text_input("등록된 영양제 1정 용량", placeholder="예: 1정, 2캡슐", value="")
+                f_dosage = st.text_input("내 섭취 용량 (1회/1정)", placeholder="예: 1정 (또는 10mg)", value="")
                 
             f_eat_times = st.multiselect("먹는 시간 선택", TIME_SLOTS, default=["점심"])
             
@@ -268,8 +270,11 @@ with tab2:
                     st.error("영양제 이름을 입력해주세요.")
                 else:
                     eat_time_str = ", ".join(f_eat_times) if f_eat_times else "점심"
-                    # 권장 용량과 1정 용량을 보기 좋게 합쳐서 dosage 칸에 저장
-                    combined_dosage = f"권장: {f_recommended.strip()} | 1정: {f_dosage.strip()}" if f_recommended.strip() else (f_dosage.strip() or "섭취량 미입력")
+                    
+                    # 표준 용량과 내 섭취 용량을 깔끔한 형태로 조합
+                    std_text = f_standard.strip() if f_standard.strip() else "기준 미기재"
+                    my_text = f_dosage.strip() if f_dosage.strip() else "섭취량 미기재"
+                    combined_dosage = f"표준: {std_text} | 내 섭취: {my_text}"
                     
                     new_item = {
                         "id": str(uuid.uuid4()),
