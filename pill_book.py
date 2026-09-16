@@ -17,6 +17,22 @@ try:
 except Exception:
     client = None
 
+# 카드 간격을 줄이기 위한 커스텀 CSS
+st.markdown("""
+<style>
+[data-testid="stVerticalBlockBorderWrapper"] {
+    padding: 0.6rem 1rem !important;
+}
+div.element-container {
+    margin-bottom: 0.1rem !important;
+}
+[data-testid="stCheckbox"] {
+    margin-top: -0.3rem;
+    margin-bottom: -0.6rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # 세션 상태 초기화 (영양제 목록 저장용)
 if "supplements" not in st.session_state:
     st.session_state.supplements = []  # 각 항목: {id, name, dosage, start_date, times, taken}
@@ -150,18 +166,21 @@ with tab2:
     else:
         for item in st.session_state.supplements:
             with st.container(border=True):
-                header_col, delete_col = st.columns([5, 1])
+                header_col, delete_col = st.columns([6, 1])
                 with header_col:
-                    st.markdown(f"**{item['name']}**  ·  {item['dosage'] or '섭취량 미입력'}")
-                    st.caption(f"등록일: {item['start_date']}  ·  섭취 시간대: {', '.join(item['times'])}")
+                    st.markdown(
+                        f"**{item['name']}** · {item['dosage'] or '섭취량 미입력'} "
+                        f"&nbsp;<span style='color:#888;font-size:0.8rem'>"
+                        f"{item['start_date']} · {', '.join(item['times'])}</span>",
+                        unsafe_allow_html=True
+                    )
                 with delete_col:
-                    if st.button("삭제", key=f"delete_{item['id']}"):
+                    if st.button("삭제", key=f"delete_{item['id']}", use_container_width=True):
                         st.session_state.supplements = [
                             s for s in st.session_state.supplements if s["id"] != item["id"]
                         ]
                         st.rerun()
 
-                st.write("오늘 섭취 체크")
                 check_cols = st.columns(len(item["times"]) if item["times"] else 1)
                 for i, t in enumerate(item["times"]):
                     with check_cols[i]:
