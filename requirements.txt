@@ -2,3 +2,4 @@ google-genai
 streamlit
 python-pptx
 st_img_pastebutton
+google-generativeai
