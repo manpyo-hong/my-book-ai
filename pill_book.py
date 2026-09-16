@@ -134,7 +134,8 @@ def ai_lookup(name: str) -> str:
     if not api_key:
         raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    # 💡 최신 모델명(gemini-3.6-flash)으로 업데이트
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     
     prompt = f"""
     당신은 전문 약사입니다. 다음 약 또는 영양제에 대해 알려주세요: {name}
