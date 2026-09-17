@@ -110,7 +110,6 @@ def load_supplements_from_sheet():
         std_val = r.get("standard_dosage", "")
         my_val = r.get("my_dosage", "")
         
-        # 구글 시트에 기존에 합쳐진 데이터(dosage)만 있는 경우를 위한 안전 장치
         if not std_val and not my_val and r.get("dosage"):
             legacy = r.get("dosage")
             if "|" in legacy:
@@ -204,6 +203,15 @@ if "supplements" not in st.session_state:
     else:
         st.session_state.sheet_error = "not_configured"
 
+if "show_form" not in st.session_state:
+    st.session_state.show_form = False
+
+if "form_name" not in st.session_state:
+    st.session_state.form_name = ""
+
+if "form_standard" not in st.session_state:
+    st.session_state.form_standard = ""
+
 
 # 메인 타이틀
 st.title("💊 스마트 복용 기록부")
@@ -257,7 +265,12 @@ with tab2:
     with col2:
         supp_ai_search = st.button("✨ AI 조회", use_container_width=True, key="supp_ai_search", type="primary")
     with col3:
-        supp_direct_input = st.button("➕ 직접 등록", use_container_width=True, key="supp_direct_input")
+        if st.button("➕ 직접 등록", use_container_width=True, key="supp_direct_input"):
+            st.session_state.form_name = supp_input if supp_input else ""
+            st.session_state.form_standard = ""
+            st.session_state.show_form = True
+            st.session_state.pop("supp_ai_result", None)
+            st.rerun()
 
     if supp_ai_search:
         if not supp_input.strip():
@@ -268,7 +281,9 @@ with tab2:
                     ai_result, standard_val = ai_lookup(supp_input)
                     st.session_state["supp_ai_result"] = ai_result
                     st.session_state["supp_ai_result_name"] = supp_input
-                    st.session_state["auto_standard"] = standard_val
+                    st.session_state.form_name = supp_input
+                    st.session_state.form_standard = standard_val
+                    st.session_state.show_form = True
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {e}")
 
@@ -277,25 +292,16 @@ with tab2:
             st.markdown(f"#### 💊 {st.session_state['supp_ai_result_name']} AI 정보 (국내 표준 권장용량 자동 연동됨)")
             st.markdown(st.session_state["supp_ai_result"])
 
-    show_form = supp_direct_input or bool(st.session_state.get("supp_ai_result"))
-
-    if show_form:
-        with st.form("add_supplement_form", clear_on_submit=True):
+    if st.session_state.show_form:
+        with st.form("add_supplement_form"):
             st.markdown("#### 📝 복용 정보 입력")
-            f_name = st.text_input("영양제 이름", value=supp_input if supp_input else "")
+            f_name = st.text_input("영양제 이름", value=st.session_state.form_name)
             
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                f_standard = st.text_input(
-                    "국내 표준 1일 권장 용량 (자동입력)", 
-                    value=st.session_state.get("auto_standard", "")
-                )
+                f_standard = st.text_input("국내 표준 1일 권장 용량", value=st.session_state.form_standard)
             with col_f2:
-                f_dosage = st.text_input(
-                    "내 섭취 용량 (영양제 표기 기준)", 
-                    placeholder="예: 1정, 2캡슐", 
-                    value=""
-                )
+                f_dosage = st.text_input("내 섭취 용량 (영양제 표기 기준)", placeholder="예: 1정, 2캡슐", value="")
                 
             f_eat_times = st.multiselect("먹는 시간 선택", TIME_SLOTS, default=["점심"])
             
@@ -325,8 +331,7 @@ with tab2:
                             st.error(f"구글 시트 저장 실패: {e}")
                     st.session_state.supplements.append(new_item)
                     st.session_state.pop("supp_ai_result", None)
-                    st.session_state.pop("supp_ai_result_name", None)
-                    st.session_state.pop("auto_standard", None)
+                    st.session_state.show_form = False
                     st.success(f"'{f_name}'이(가) 성공적으로 추가되었습니다!")
                     st.rerun()
 
